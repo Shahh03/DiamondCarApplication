@@ -31,6 +31,73 @@ class _BookingDetailsPageState extends State<BookingDetailsPage> {
     }
   }
 
+  Widget _rowItem(IconData icon, String label, String? value) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 8.0),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20, color: Colors.indigoAccent),
+        const SizedBox(width: 12),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              text: "$label: ",
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+                color: Colors.black,
+              ),
+              children: [
+                TextSpan(
+                  text: value ?? 'N/A',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.normal,
+                    color: Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Color _getStatusColor(String status) {
+  switch (status.toLowerCase()) {
+    case 'confirmed':
+      return Colors.green;
+    case 'pending':
+      return Colors.orange;
+    case 'cancelled':
+      return Colors.red;
+    default:
+      return Colors.grey;
+  }
+}
+Color _getStatusTextColor(String status) {
+  switch (status.toLowerCase()) {
+    case 'confirmed':
+      return Colors.green;
+    case 'pending':
+      return Colors.orange;
+    case 'cancelled':
+      return Colors.red;
+    default:
+      return Colors.black;
+  }
+}
+
+String _capitalize(String text) {
+  if (text.isEmpty) return text;
+  return text[0].toUpperCase() + text.substring(1).toLowerCase();
+}
+
+
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -83,82 +150,119 @@ class _BookingDetailsPageState extends State<BookingDetailsPage> {
                         },
                       ),
                     ),
+                    
 
-Padding(
-  padding: const EdgeInsets.only(top: 16.0),
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
+                    Padding(
+                      padding: const EdgeInsets.only(top: 16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "${car['brand']} ${car['model']} ${car['year']}",
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.location_on,
+                                size: 18,
+                                color: Colors.indigoAccent,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                "${provider['address']['state']}, ${provider['address']['country']}",
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  color: Color.fromARGB(255, 128, 117, 101),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+
+              Padding(
+  padding: const EdgeInsets.only(top: 5.0),
+  child: Row(
     children: [
-      Text(
-        "${car['brand']} ${car['model']} ${car['year']}",
-        style: const TextStyle(
-          fontSize: 22,
-          fontWeight: FontWeight.bold,
-        ),
+      const Icon(
+        Icons.business,
+        size: 18,
+        color: Colors.indigoAccent,
       ),
-      const SizedBox(height: 4),
-      Row(
-        children: [
-          const Icon(
-            Icons.location_on,
-            size: 18,
-            color: Colors.indigoAccent,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            "${provider['address']['state']}, ${provider['address']['country']}",
-            style: const TextStyle(
-              fontSize: 16,
-              color: Colors.grey,
-            ),
-          ),
-        ],
+      const SizedBox(width: 6),
+      Text(
+        provider['companyName'] ,
+        style: const TextStyle(
+          fontSize: 18,
+          color: Color.fromARGB(255, 128, 117, 101),
+        ),
       ),
     ],
   ),
 ),
 
 
-                  Padding(
-                    padding: const EdgeInsets.only(top: 5.0), // 16 pixels top margin
-                    child: Text(
-                      "${provider['companyName']}",
-                      style: const TextStyle(
-                        fontSize: 15,
-                        color: Colors.orange,
+
+
+                const Divider(height: 32),
+
+               Text("Car Overview",style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold,)),
+                const SizedBox(height: 12),
+
+                Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, size: 20, color: Colors.indigoAccent),
+                    const SizedBox(width: 12),
+                    Text(
+                      _capitalize(booking['status']),
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                        color: _getStatusTextColor(booking['status']),
                       ),
                     ),
-                  ),
+                  ],
+                ),
+              ),
 
+                _rowItem(Icons.confirmation_number, "ID", booking["_id"]),
 
+                _rowItem(Icons.calendar_today, "Start date", booking['startDate'].split('T')[0]),
+                _rowItem(Icons.calendar_today_outlined, "End Date", booking['endDate'].split('T')[0]),
 
-
-                const Divider(height: 32),                 
-
-                Text("Status: ${booking['status']}"),
-                Text("From: ${booking['startDate']}"),
-                Text("To: ${booking['endDate']}"),
                 const Divider(height: 32),
 
                 // Car Info
-                const SizedBox(height: 8),
-                Text("Brand: ${car['brand']}"),
-                Text("Model: ${car['model']}"),
-                Text("Year: ${car['year']}"),
-                Text("Category: ${car['category']}"),
-                Text("Color: ${carVariant['color']}"),
-                Text("Registration #: ${carVariant['registrationNumber']}"),
-                Text("Rental Price/Day: ${carVariant['rentalPricePerDay']} AED"),
+
+               Text("Car Overview",style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold,)),
+
+                const SizedBox(height: 12),
+                _rowItem(Icons.directions_car, "Category", car['category']),
+                _rowItem(Icons.color_lens, "Color", carVariant['color']),
+                _rowItem(Icons.local_gas_station, "Fuel Type", car['fuelType']),
+                _rowItem(Icons.settings, "Gear Box", car['transmission']),
+                _rowItem(Icons.event_seat, "Seating Capacity", "${car['seats']} passengers"),
+                _rowItem(Icons.confirmation_number, "Registration #", carVariant['registrationNumber']),
                 const Divider(height: 32),
 
                 // Provider Info
-                Text("Provider Info", style: Theme.of(context).textTheme.titleLarge),
+               Text("Provider Info",style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold,)),
                 const SizedBox(height: 8),
-                Text("Username: ${provider['username']}"),
-                Text("Company: ${provider['companyName']}"),
-                Text("Email: ${provider['contactPerson']['email']}"),
-                Text("Phone: ${provider['contactPerson']['phoneNumber']}"),
+
+              _rowItem(Icons.business, "Listed By", provider['companyName']),
+              _rowItem(Icons.email, "Email", provider['contactPerson']['email']),
+              //_rowItem(Icons.phone, "Contact", provider['contactPerson']['phoneNumber']),
+
+              
                 const Divider(height: 32),
 
    
@@ -166,10 +270,8 @@ Padding(
                 // Payment Info
                 Text("Payment Info", style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 8),
-                Text("Amount: ${payment['amount']} ${payment['currency']}"),
-                Text("Status: ${payment['paymentStatus']}"),
-                Text("Method: ${payment['paymentMethod']}"),
-                Text("Transaction ID: ${payment['transactionId']}"),
+                _rowItem(Icons.attach_money, "Amount", "${payment['amount']} ${payment['currency']}"),
+                _rowItem(Icons.credit_card, "Method", payment['paymentMethod']),
               ],
             ),
           );
