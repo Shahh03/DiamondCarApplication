@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:project/renter/navbar_pages/home.dart';
 import 'package:project/renter/navbar_pages/search.dart';
 import 'package:project/renter/navbar_pages/myRentals.dart';
-import 'package:project/renter/navbar_pages/profile.dart';
+import 'package:project/renter/navbar_pages/account.dart';
 
 class BottomNavBar extends StatelessWidget {
   final int currentIndex;
@@ -65,7 +65,7 @@ class BottomNavBar extends StatelessWidget {
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.person),
-          label: 'Profile',
+          label: 'Account',
         ),
       ],
     );
