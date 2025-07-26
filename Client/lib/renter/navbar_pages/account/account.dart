@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:project/renter/navbar_pages/bottom_nav_bar.dart';
-
+import 'editProfile.dart';
+import 'currencySelecetor.dart';
 class RenterProfile extends StatefulWidget {
   final String id;
 
@@ -13,6 +14,7 @@ class RenterProfile extends StatefulWidget {
 }
 
 class _RenterProfileState extends State<RenterProfile> {
+
   Map<String, dynamic>? userData;
   bool isLoading = true;
 
@@ -107,10 +109,12 @@ class _RenterProfileState extends State<RenterProfile> {
                       // Settings / Options
                       Column(
                         children: [
-                          _settingItem(Icons.person, 'Edit Profile', () {}),
+
+                          _settingItem(Icons.person, 'Edit Profile', () { final userId = userData!["_id"]; Navigator.push(context,MaterialPageRoute(builder: (context) => EditProfilePage(id: userId),),);}),
                           _settingItem(Icons.favorite_border, 'My Wishlist', () {}),
-                          _settingItem(Icons.currency_exchange, 'Change Currerncy', () {}),
+                          _settingItem(Icons.currency_exchange, 'Change Currerncy', () { final userId = userData!["_id"]; Navigator.push(context,MaterialPageRoute(builder: (context) => CurrencySelectorPage(id: userId),),);}),
                           _settingItem(Icons.help_outline, 'Help & Support', () {}),
+                          _settingItem(Icons.settings, 'Settings', () {}),
                           _settingItem(Icons.logout, 'Log Out', () {
                             // Log out action
                           }),

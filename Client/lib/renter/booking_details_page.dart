@@ -65,18 +65,7 @@ class _BookingDetailsPageState extends State<BookingDetailsPage> {
   );
 }
 
-Color _getStatusColor(String status) {
-  switch (status.toLowerCase()) {
-    case 'confirmed':
-      return Colors.green;
-    case 'pending':
-      return Colors.orange;
-    case 'cancelled':
-      return Colors.red;
-    default:
-      return Colors.grey;
-  }
-}
+
 Color _getStatusTextColor(String status) {
   switch (status.toLowerCase()) {
     case 'confirmed':

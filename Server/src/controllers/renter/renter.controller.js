@@ -53,3 +53,65 @@ export const getAllRenters = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+export const updateRenter = async (req, res) => {
+  try {
+    const { renterId } = req.params;
+    const {
+      name,
+      nationality,
+      occupation,
+      location,
+      gender,
+      birthDate,
+    } = req.body;
+
+    // 🔎 Validate inputs
+    if (!name || name.length < 2) {
+      return res.status(400).json({ message: 'Name must be at least 2 characters' });
+    }
+
+
+    // 🧠 Build update object
+    const updateFields = {
+      name,
+      nationality,
+      occupation,
+      location,
+      gender,
+      birthDate,
+    };
+
+    // 🛠️ Update renter
+    const updatedRenter = await Renter.findByIdAndUpdate(renterId, updateFields, { new: true });
+
+    if (!updatedRenter) {
+      return res.status(404).json({ message: 'Renter not found' });
+    }
+
+    res.status(200).json(updatedRenter);
+  } catch (error) {
+    console.error('Update error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+
+export const updateRenterCurrency = async (req, res) => {
+  try {
+    const { renterId } = req.params;
+    const { currency } = req.body;
+
+    const updatedRenter = await Renter.findByIdAndUpdate(renterId, { currency }, { new: true });
+
+    if (!updatedRenter) {
+      return res.status(404).json({ message: 'Renter not found' });
+    }
+
+    res.status(200).json(updatedRenter);
+  } catch (error) {
+    console.error('Update error:', error);
+    res.status(500).json({ message: error.message });
+  }
+}

@@ -27,6 +27,7 @@ class _RenterMyRentalsState extends State<RenterMyRentals> {
     super.initState();
     getUserData();
     getRenterBookings();
+
   }
 
   Future<void> getUserData() async {
