@@ -115,3 +115,79 @@ export const updateRenterCurrency = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 }
+
+export const changeRenterUsername = async (req, res) => {
+  try {
+    const { renterId } = req.params;
+    let { username } = req.body;
+
+    if (!username) {
+      return res.status(400).json({ message: 'Username is required' });
+    }
+
+
+         username = username.toLowerCase();
+
+
+    // Validate: at least 4 different letters
+    const letters = username.match(/[a-zA-Z]/g) || [];
+    const uniqueLetters = new Set(letters.map(l => l.toLowerCase()));
+    if (uniqueLetters.size < 4) {
+      return res.status(400).json({ message: 'Username must contain at least 4 different letters' });
+    }
+
+    // Check if renter exists
+    const renter = await Renter.findById(renterId);
+    if (!renter) {
+      return res.status(404).json({ message: 'Renter not found' });
+    }
+
+    if (renter.username.toLowerCase() === username) {
+      return res.status(400).json({ message: `${username} is already your username` });
+    }
+    const usernameTaken = await Renter.findOne({ username });
+    if (usernameTaken) {
+      return res.status(400).json({ message: 'Username already exists' });
+    }
+
+    renter.username = username;
+    await renter.save();
+
+    res.status(200).json(renter);
+  } catch (error) {
+    console.error('Update error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+export const changeRenterPassword = async (req, res) => {
+  try {
+    const renterId = req.params.renterId; 
+    const {oldPassword, newPassword } = req.body;
+
+    const renter = await Renter.findById(renterId);
+    if (!renter) {
+      return res.status(404).json({ message: 'Renter not found' });
+    }
+
+
+    if (oldPassword!==renter.password) {
+      return res.status(400).json({ message: 'Old password is incorrect' });
+    }
+
+    if (oldPassword === newPassword) {
+      return res.status(400).json({ message: 'New password cannot be the same as the old password' });
+    }
+
+    renter.password = newPassword;
+    await renter.save();
+
+    res.status(200).json(renter);
+  }catch (error) {
+    console.error('Update error:', error);
+    res.status(500).json({ message: error.message });
+  }
+
+}
+   

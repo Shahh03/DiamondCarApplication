@@ -94,6 +94,7 @@ Widget build(BuildContext context) {
   return Scaffold(
     appBar: AppBar(
       title: const Text('My Rentals'),
+      backgroundColor: Colors.blueAccent,
       automaticallyImplyLeading: false,
     ),
     body: isLoading
@@ -106,7 +107,7 @@ Widget build(BuildContext context) {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'You have ${renterBookings.length} bookings',
+                      'You have ${renterBookings.length} Rentals',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,

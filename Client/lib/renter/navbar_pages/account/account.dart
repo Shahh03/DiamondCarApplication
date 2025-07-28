@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:project/renter/navbar_pages/bottom_nav_bar.dart';
 import 'editProfile.dart';
 import 'currencySelecetor.dart';
+import 'Settings/settings.dart';
 class RenterProfile extends StatefulWidget {
   final String id;
 
@@ -41,17 +42,54 @@ class _RenterProfileState extends State<RenterProfile> {
   }
 
   @override
-  void initState() {
+ void initState() {
     super.initState();
     getUserData();
   }
+Future<void> logOut() async {
+  try {
+    // Clear tokens, user data, or call logout endpoint if your backend supports it
+    // For now, just pop to login page or clear local storage if any
+
+    Navigator.pushReplacementNamed(context, '/login'); // or any login route
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Logged Out')),
+    );
+  } catch (e) {
+    print('Error logging out: $e');
+  }
+}
+
+
+ void showLogOutDialog() {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Are you sure you want to log out?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.pop(context);
+            logOut(); // calls the actual logout
+          },
+          child: const Text('Log Out'),
+        ),
+      ],
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Account'),
-        foregroundColor: Colors.blueAccent,
+        backgroundColor: Colors.blueAccent,
         automaticallyImplyLeading: false,
       ),
       body: isLoading
@@ -114,10 +152,8 @@ class _RenterProfileState extends State<RenterProfile> {
                           _settingItem(Icons.favorite_border, 'My Wishlist', () {}),
                           _settingItem(Icons.currency_exchange, 'Change Currerncy', () { final userId = userData!["_id"]; Navigator.push(context,MaterialPageRoute(builder: (context) => CurrencySelectorPage(id: userId),),);}),
                           _settingItem(Icons.help_outline, 'Help & Support', () {}),
-                          _settingItem(Icons.settings, 'Settings', () {}),
-                          _settingItem(Icons.logout, 'Log Out', () {
-                            // Log out action
-                          }),
+                          _settingItem(Icons.settings, 'Settings', () { final userId = userData!["_id"]; Navigator.push(context,MaterialPageRoute(builder: (context) => SettingsPage(id: userId),),);}),
+                          _settingItem(Icons.logout, 'Log Out', () {showLogOutDialog();}),
                         ],
                       ),
                     ],
@@ -129,6 +165,8 @@ class _RenterProfileState extends State<RenterProfile> {
       ),
     );
   }
+
+  
 
   Widget _statItem(String label, String value) {
     return Column(

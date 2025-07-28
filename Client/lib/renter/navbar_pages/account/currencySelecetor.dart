@@ -86,6 +86,7 @@ class _CurrencySelectorPageState extends State<CurrencySelectorPage> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Select Currency')),
+      backgroundColor: Colors.blueAccent,
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : Padding(
