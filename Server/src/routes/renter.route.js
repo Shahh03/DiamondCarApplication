@@ -1,5 +1,5 @@
 import express from "express";
-import {getAllRenters, getRenterbyId ,getBookingsForRenter , updateRenter , updateRenterCurrency , changeRenterUsername , changeRenterPassword , getWishlistforRenter} from "../controllers/renter/renter.controller.js";
+import {getAllRenters, getRenterbyId ,getBookingsForRenter , updateRenter , updateRenterCurrency , changeRenterUsername , changeRenterPassword , getWishlistforRenter , removeFromWishlist} from "../controllers/renter/renter.controller.js";
 import { get } from "mongoose";
 
 const router = express.Router();
@@ -19,7 +19,8 @@ router.put("/renter/changeUsername/:renterId", changeRenterUsername); //works
 
 router.put("/renter/changePassword/:renterId", changeRenterPassword); //works
 
-router.get("/renter/getWishlist/:renterId", getWishlistforRenter);
+router.get("/renter/getWishlist/:renterId", getWishlistforRenter); //works
 
+router.delete("/renter/removeFromWishlist/:renterId/:carVariantId", removeFromWishlist);
 
 export default router;

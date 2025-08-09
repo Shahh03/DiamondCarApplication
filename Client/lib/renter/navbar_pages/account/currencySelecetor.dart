@@ -85,9 +85,10 @@ class _CurrencySelectorPageState extends State<CurrencySelectorPage> {
     final currencyCodes = currencyMap.keys.toList();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Select Currency')),
-      backgroundColor: Colors.blueAccent,
+
+      appBar: AppBar(backgroundColor: Colors.blueAccent, title: const Text('Select Currency')),
       body: isLoading
+      
           ? const Center(child: CircularProgressIndicator())
           : Padding(
               padding: const EdgeInsets.all(16),

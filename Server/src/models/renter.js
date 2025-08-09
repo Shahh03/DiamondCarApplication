@@ -71,7 +71,7 @@ const renterSchema = new mongoose.Schema({
   },
   currency: {
     type: String,
-    enum: ["USD", "CAD", "GBP", "EUR", "AUD", "EGP",],
+    enum: ["USD", "CAD", "GBP", "EUR", "AUD", "EGP","AED", "SAR", "QAR", "OMR", "BHD"],
     default: "EGP"
   },
 

@@ -5,6 +5,7 @@ import 'package:project/renter/navbar_pages/bottom_nav_bar.dart';
 import 'editProfile.dart';
 import 'currencySelecetor.dart';
 import 'Settings/settings.dart';
+import 'wishlist/myWishlist.dart';
 class RenterProfile extends StatefulWidget {
   final String id;
 
@@ -149,7 +150,7 @@ Future<void> logOut() async {
                         children: [
 
                           _settingItem(Icons.person, 'Edit Profile', () { final userId = userData!["_id"]; Navigator.push(context,MaterialPageRoute(builder: (context) => EditProfilePage(id: userId),),);}),
-                          _settingItem(Icons.favorite_border, 'My Wishlist', () {}),
+                          _settingItem(Icons.favorite_border, 'My Wishlist', () { final userId = userData!["_id"]; Navigator.push(context,MaterialPageRoute(builder: (context) => WishlistPage(renterId: userId),),);}),
                           _settingItem(Icons.currency_exchange, 'Change Currerncy', () { final userId = userData!["_id"]; Navigator.push(context,MaterialPageRoute(builder: (context) => CurrencySelectorPage(id: userId),),);}),
                           _settingItem(Icons.help_outline, 'Help & Support', () {}),
                           _settingItem(Icons.settings, 'Settings', () { final userId = userData!["_id"]; Navigator.push(context,MaterialPageRoute(builder: (context) => SettingsPage(id: userId),),);}),

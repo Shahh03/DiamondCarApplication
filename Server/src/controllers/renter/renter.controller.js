@@ -1,5 +1,6 @@
 import Renter from "../../models/renter.js";
 import Booking from "../../models/booking.js";
+import CarVariant from "../../models/carVariant.js";
 
 export const getAllRenters = async (req, res) => {
     try {
@@ -195,13 +196,50 @@ export const changeRenterPassword = async (req, res) => {
 export const getWishlistforRenter = async (req, res) => {
   try {
     const renterId = req.params.renterId;
-    const Renter = await Renter.findOne({ renter: renterId });
 
-    if (!Renter) {
+    // Find renter and populate wishlist and car details
+    const renter = await Renter.findOne({ _id: renterId })
+      .populate({
+        path: 'wishlist',
+        populate: { path: 'car' } // this ensures car details are included
+      });
+
+    if (!renter) {
       return res.status(404).json({ message: 'Renter does not exist' });
     }
-    res.status(200).json(wishlist);
+
+    // Return wishlist array directly
+    res.status(200).json(renter.wishlist);
   } catch (error) {
+    console.error("Error fetching wishlist:", error);
     res.status(500).json({ message: error.message });
   }
-}
+};
+
+export const removeFromWishlist = async (req, res) => {
+  const { renterId, carVariantId } = req.params;
+
+  try {
+    const renter = await Renter.findById(renterId);
+    if (!renter) {
+      return res.status(404).json({ message: 'Renter not found' });
+    }
+
+    // Optional: Validate carVariant exists
+    const carVariant = await CarVariant.findById(carVariantId);
+    if (!carVariant) {
+      return res.status(404).json({ message: 'Car variant not found' });
+    }
+
+    // Remove the car from wishlist
+    renter.wishlist = renter.wishlist.filter(
+      (id) => id.toString() !== carVariantId
+    );
+
+    await renter.save();
+    res.status(200).json({ message: 'Car removed from wishlist', wishlist: renter.wishlist });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  }
+};
