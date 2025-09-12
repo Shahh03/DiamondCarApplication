@@ -1,7 +1,7 @@
 import express from "express";
-import {getAllRenters, getRenterbyId ,getBookingsForRenter , updateRenter , updateRenterCurrency , changeRenterUsername , changeRenterPassword , getWishlistforRenter , removeFromWishlist} from "../controllers/renter/renter.controller.js";
+import {getAllRenters, getRenterbyId ,getBookingsForRenter , updateRenter , updateRenterCurrency , changeRenterUsername , changeRenterPassword , getWishlistforRenter , removeFromWishlist ,changeRenterProfilePicture} from "../controllers/renter/renter.controller.js";
 import { get } from "mongoose";
-
+import {renterUpload  } from "../middlewares/upload.js";
 const router = express.Router();
 
   
@@ -21,6 +21,15 @@ router.put("/renter/changePassword/:renterId", changeRenterPassword); //works
 
 router.get("/renter/getWishlist/:renterId", getWishlistforRenter); //works
 
-router.delete("/renter/removeFromWishlist/:renterId/:carVariantId", removeFromWishlist);
+router.delete("/renter/removeFromWishlist/:renterId/:carVariantId", removeFromWishlist); //works ig
+
+//router.post("/renter/changeProfilePicture/:renterId", changeRenterProfilePicture);
+
+// routes/renter.route.js
+router.post(
+  '/renter/changeProfilePicture/:renterId',
+  renterUpload.single('file'),     // expects the form-data key named "file"
+  changeRenterProfilePicture
+);
 
 export default router;

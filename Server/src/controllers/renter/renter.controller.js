@@ -1,6 +1,14 @@
 import Renter from "../../models/renter.js";
 import Booking from "../../models/booking.js";
 import CarVariant from "../../models/carVariant.js";
+import mongoose from 'mongoose';
+
+
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+
 
 export const getAllRenters = async (req, res) => {
     try {
@@ -241,5 +249,66 @@ export const removeFromWishlist = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: error.message });
+  }
+};
+
+
+
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
+
+export const changeRenterProfilePicture = async (req, res) => {
+  try {
+    const { renterId } = req.params;
+
+    // validate ObjectId to avoid CastError
+    if (!mongoose.Types.ObjectId.isValid(renterId)) {
+      if (req.file?.path) fs.unlink(req.file.path, () => {});
+      return res.status(400).json({ error: 'Invalid renterId' });
+    }
+
+    // multer.single('file') must have populated req.file
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded (use form-data key "file")' });
+    }
+
+    const renter = await Renter.findById(renterId);
+    if (!renter) {
+      fs.unlink(req.file.path, () => {});
+      return res.status(404).json({ error: 'Renter not found' });
+    }
+
+    // build a public relative path that starts with /uploads/...
+    const normalized = (req.file.path || '').replace(/\\/g, '/');
+    const i = normalized.lastIndexOf('/uploads/');
+    const relPath = i !== -1
+      ? normalized.substring(i)
+      : `/uploads/renters/profile/${req.file.filename}`;
+
+    // delete old local file if we own it
+    const oldRel = renter.profilePicture?.filepath;
+    if (oldRel && oldRel.startsWith('/uploads/')) {
+      const oldAbs = path.join(__dirname, '..', '..', oldRel);
+      fs.unlink(oldAbs, () => {});
+    }
+
+    renter.profilePicture = {
+      filename: req.file.filename,  // stored filename on disk
+      filepath: relPath,            // relative public URL
+    };
+    await renter.save();
+
+    return res.json({
+      message: 'Profile picture updated',
+      renter: {
+        _id: renter._id,
+        name: renter.name,
+        profilePicture: renter.profilePicture,
+      },
+    });
+  } catch (e) {
+    console.error('changeRenterProfilePicture error:', e);
+    return res.status(500).json({ error: 'Failed to change profile picture' });
   }
 };

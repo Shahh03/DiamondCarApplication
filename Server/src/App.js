@@ -6,6 +6,8 @@ import initializeRoutes from "./routes/routes.js";
 import cors from "cors";
 import path from "path"; // Import path module
 import { fileURLToPath } from "url"; // Import fileURLToPath for getting the directory name
+import multer from 'multer';
+
 
 dotenv.config(); // Load environment variables
 
@@ -39,6 +41,21 @@ class App {
     // Enable CORS for all routes
     this.app.use(cors());
     this.app.use(express.json()); // Parse incoming JSON requests
+
+    this.app.use((err, req, res, next) => {
+        if (err.code === 'UNSUPPORTED_FILE_TYPE') {
+          return res.status(415).json({
+            error: 'Only JPG, JPEG, PNG, HEIC, HEIF, WEBP, GIF, or DNG are allowed.',
+          });
+        }
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(413).json({ error: 'File too large.' });
+        }
+        if (err instanceof multer.MulterError) {
+          return res.status(400).json({ error: err.message });
+        }
+        next(err);
+      });
 
     // Serve static files from the 'uploads' directory
     this.app.use("/uploads", express.static(path.join(this.__dirname, "uploads")));
