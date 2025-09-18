@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:project/renter/navbar_pages/bottom_nav_bar.dart';
+import 'package:intl/intl.dart';
+
 
 class RenterSearch extends StatefulWidget {
   final String id;
@@ -67,6 +69,78 @@ class _RenterSearchState extends State<RenterSearch> {
       setState(() => isUserLoading = false);
     }
   }
+
+  // ===== Currency helpers =====
+
+// Read the user’s preferred currency from the loaded user object.
+// Adjust the keys if your backend uses different names.
+String get _preferredCurrency {
+  final c =
+      userData?['currency'] ??
+      userData?['preferredCurrency'] ??
+      userData?['settings']?['currency'] ??
+      'EGP';
+  return c.toString().toUpperCase();
+}
+
+// Try to read FX rates (EGP per 1 unit of currency) from the user profile,
+// falling back to sensible placeholders if not present.
+// Example shape you can send from backend:
+// user.currency = "USD"
+// user.fxRates = { "USD": 50.0, "EUR": 54.0, "GBP": 64.0, "SAR": 13.3, "AED": 13.6 }
+Map<String, double> get _egpPerUnit {
+  final m = <String, double>{'EGP': 1};
+  final fx = userData?['fxRates'];
+  if (fx is Map) {
+    for (final e in fx.entries) {
+      final k = e.key.toString().toUpperCase();
+      final v = (e.value is num) ? (e.value as num).toDouble() : null;
+      if (v != null && v > 0) m[k] = v;
+    }
+  }
+  // fallbacks in case backend didn't send
+  m.putIfAbsent('USD', () => 50.0);
+  m.putIfAbsent('EUR', () => 54.0);
+  m.putIfAbsent('GBP', () => 64.0);
+  m.putIfAbsent('SAR', () => 13.3);
+  m.putIfAbsent('AED', () => 13.6);
+  return m;
+}
+
+String _currencySymbol(String code) {
+  switch (code.toUpperCase()) {
+    case 'USD':
+      return r'$';
+    case 'EUR':
+      return '€';
+    case 'GBP':
+      return '£';
+    case 'SAR':
+      return '﷼';
+    case 'AED':
+      return 'د.إ';
+    case 'EGP':
+    default:
+      return 'EGP';
+  }
+}
+
+// Convert an amount that’s stored in **EGP** to the user’s preferred currency
+// and return a formatted label (0 decimals, with thousands separators).
+String _formatMoneyFromEGP(num egpAmount, {String? to}) {
+  final code = (to ?? _preferredCurrency).toUpperCase();
+  final egpPer1 = _egpPerUnit[code] ?? 1.0;        // EGP per 1 unit of target
+  final value = (code == 'EGP')
+      ? egpAmount.toDouble()
+      : egpAmount.toDouble() / egpPer1;
+  final sym = _currencySymbol(code);
+
+  // no cents for daily car pricing
+  final s = NumberFormat.decimalPattern().format(value.round());
+  // For EGP we print "EGP 1,234"; for others "$ 1,234"
+  return (code == 'EGP') ? '$sym $s' : '$sym $s';
+}
+
 
   Future<void> getAllAvailableCarVariants() async {
     try {
@@ -532,19 +606,21 @@ const SizedBox(height: 10),
                             ),
                             _FilterButton(
                               label: (selectedPrice != null && priceMax > priceMin)
-                                  ? 'EGP ${selectedPrice!.start.round()} - ${selectedPrice!.end.round()}'
-                                  : 'Price range',
+                              ? '${_formatMoneyFromEGP(selectedPrice!.start)} - ${_formatMoneyFromEGP(selectedPrice!.end)}'
+                              : 'Price range',
                               icon: Icons.price_change_outlined,
                               onTap: () {
                                 if (priceMax <= priceMin) return;
                                 _openRangeSheet(
-                                  title: 'Price per day (EGP)',
-                                  min: priceMin,
-                                  max: priceMax,
-                                  current: selectedPrice ?? RangeValues(priceMin, priceMax),
-                                  onApplied: (val) => setState(() => selectedPrice = val),
-                                  formatValue: (v) => 'EGP ${v.round()}',
-                                );
+                                title: 'Price per day (${_preferredCurrency})',
+                                min: priceMin,
+                                max: priceMax,
+                                current: selectedPrice ?? RangeValues(priceMin, priceMax),
+                                onApplied: (val) => setState(() => selectedPrice = val),
+                                // v is in EGP internally; we only change how it’s *displayed*
+                                formatValue: (v) => _formatMoneyFromEGP(v),
+                              );
+
                               },
                             ),
                             _FilterButton(
@@ -733,22 +809,22 @@ const SizedBox(height: 10),
                                             const SizedBox(width: 8),
 
                                             // RIGHT: price/deposit
-                                            Column(
+                                           Builder(builder: (_) {
+                                            final priceNum   = num.tryParse(price) ?? 0;
+                                            final depositNum = num.tryParse(deposit) ?? 0;
+
+                                            return Column(
                                               crossAxisAlignment: CrossAxisAlignment.end,
                                               children: [
-                                                if (price.isNotEmpty)
-                                                  Text(
-                                                    'EGP $price/day',
-                                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                                                  ),
-                                                if (deposit.isNotEmpty) const SizedBox(height: 2),
-                                                if (deposit.isNotEmpty)
-                                                  Text(
-                                                    'Deposit: EGP $deposit',
-                                                    style: const TextStyle(fontSize: 12, color: Colors.black54),
-                                                  ),
+                                                if (priceNum > 0)
+                                                  Text('${_formatMoneyFromEGP(priceNum)}/day', style: const TextStyle(fontWeight: FontWeight.w700)),
+                                                if (depositNum > 0) const SizedBox(height: 2),
+                                                if (depositNum > 0)
+                                                  Text('Deposit: ${_formatMoneyFromEGP(depositNum)}', style: const TextStyle(fontSize: 12, color: Colors.black54)),
                                               ],
-                                            ),
+                                            );
+                                          }),
+
                                           ],
                                         ),
 
