@@ -104,3 +104,12 @@ export const getAllCarsForProvider = async (req, res) => {
       res.status(500).json({ message: error.message });
     }
   }
+
+  export const getAllAvaiableCarVariants = async (req, res) => {
+    try {
+      const carVariants = await CarVariant.find(  { isAvailable: true }).populate('provider').populate('car');
+      res.status(200).json(carVariants);
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  }

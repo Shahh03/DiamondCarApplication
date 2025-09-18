@@ -129,11 +129,13 @@ String _capitalize(String text) {
                             padding: const EdgeInsets.only(right: 8.0),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(12),
-                              child: Image.asset(
-                                "assets/images/cars/$imgPath",
+                              child: Image.network(
+                                "$imgPath",
                                 width: MediaQuery.of(context).size.width,
                                 fit: BoxFit.cover,
                               ),
+                                                            //  "assets/images/cars/$imgPath",
+
                             ),
                           );
                         },

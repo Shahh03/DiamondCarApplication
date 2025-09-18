@@ -23,6 +23,7 @@ class _RenterMyRentalsState extends State<RenterMyRentals> {
   bool get isLoading => isUserLoading || isBookingsLoading;
 
   @override
+
   void initState() {
     super.initState();
     getUserData();
@@ -140,7 +141,7 @@ Widget build(BuildContext context) {
   borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
 
   child: SizedBox(
-  height: 160,
+  height: 250,
   child: ListView.builder(
     scrollDirection: Axis.horizontal,
     itemCount: images.length,
@@ -150,10 +151,10 @@ Widget build(BuildContext context) {
         padding: const EdgeInsets.only(right: 8.0),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          child: Image.asset(
-            "assets/images/cars/$imgPath",
+          child: Image.network(
+            "$imgPath",
             width: 400,
-            height: 200,
+            height: 250,
             fit: BoxFit.cover,
           ),
         ),
@@ -173,6 +174,8 @@ Widget build(BuildContext context) {
               '$brand $model $year',
               style: const TextStyle( fontWeight: FontWeight.bold, fontSize: 20),
             ),
+
+            
             const SizedBox(height: 6),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
