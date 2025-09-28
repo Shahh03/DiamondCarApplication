@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'signup.dart';
-import 'login.dart';
-import 'welcome.dart'; // NEW page
+import 'authentication/signup.dart';
+import 'authentication/login.dart';
+import 'authentication/welcome.dart'; // NEW page
 
 
 void main() {

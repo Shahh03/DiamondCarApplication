@@ -113,3 +113,13 @@ export const getAllCarsForProvider = async (req, res) => {
       res.status(500).json({ message: error.message });
     }
   }
+
+  export const getCarVariantByID = async (req, res) => {
+    try {
+      const {carVariantId} = req.params;
+      const carVariant = await CarVariant.findById(carVariantId).populate('provider').populate('car');
+      res.status(200).json(carVariant);
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  }

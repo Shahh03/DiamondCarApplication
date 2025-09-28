@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:project/renter/navbar_pages/bottom_nav_bar.dart';
 import 'package:intl/intl.dart';
-
+import 'carVariantDetails.dart';
 
 class RenterSearch extends StatefulWidget {
   final String id;
@@ -832,10 +832,20 @@ const SizedBox(height: 10),
                                         Align(
                                           alignment: Alignment.center,
                                           child: ElevatedButton(
-                                            onPressed: () {
-                                              // TODO: navigate to details page if you have one
-                                              print('Variant ID: ${v['_id']}');
-                                            },
+                                             onPressed: () {
+                                                final variantId = (v['_id'] ?? '').toString();
+                                                if (variantId.isEmpty) return;
+
+                                                Navigator.of(context).push(
+                                                  MaterialPageRoute(
+                                                    builder: (_) => CarVariantDetails(
+                                                      variantId: variantId,
+                                                      userId: widget.id,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+
                                             style: ElevatedButton.styleFrom(
                                               elevation: 4,
                                               backgroundColor: Colors.blueAccent,
@@ -848,6 +858,9 @@ const SizedBox(height: 10),
                                             ),
                                             child: const Text('View Details'),
                                           ),
+
+                                         
+
                                         ),
                                       ],
                                     ),

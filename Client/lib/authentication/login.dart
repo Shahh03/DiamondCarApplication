@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'renter/navbar_pages/home.dart';
-import 'admin/dashboard.dart';
-import 'provider/dashboard.dart';
+import '../renter/navbar_pages/home/home.dart';
+import '../admin/dashboard.dart';
+import '../provider/dashboard.dart';
 
 
 class LoginPage extends StatefulWidget {

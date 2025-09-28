@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:project/renter/navbar_pages/bottom_nav_bar.dart';
-import '../booking_details_page.dart';
+import '../../bookingDetails.dart';
 
 class RenterMyRentals extends StatefulWidget {
   final String id;

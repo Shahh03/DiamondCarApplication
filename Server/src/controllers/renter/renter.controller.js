@@ -312,3 +312,31 @@ export const changeRenterProfilePicture = async (req, res) => {
     return res.status(500).json({ error: 'Failed to change profile picture' });
   }
 };
+
+export const addToWishlist = async (req, res) => {
+  try {
+    const { renterId, carVariantId } = req.params;
+
+    const renter = await Renter.findById(renterId);
+    if (!renter) {
+      return res.status(404).json({ message: 'Renter not found' });
+    }
+
+    const carVariant = await CarVariant.findById(carVariantId);
+    if (!carVariant) {
+      return res.status(404).json({ message: 'Car variant not found' });
+    }
+
+    if (renter.wishlist.includes(carVariantId)) {
+      return res.status(400).json({ message: 'Car variant already in wishlist' });
+    }
+
+    renter.wishlist.push(carVariantId);
+    await renter.save();
+
+    res.status(200).json({ message: 'Car variant added to wishlist', wishlist: renter.wishlist });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  } 
+}
