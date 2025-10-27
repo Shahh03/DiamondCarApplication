@@ -36,7 +36,7 @@ class _CarVariantDetailsState extends State<CarVariantDetails> {
     super.initState();
     getUserData();
     getVariantData();
-    getUserWishlist(); // ← load saved items
+    getUserWishlist(); // load saved items → ensures heart is filled if already wishlisted
   }
 
   // ---------------- User & Currency helpers ----------------
@@ -51,92 +51,107 @@ class _CarVariantDetailsState extends State<CarVariantDetails> {
           userData = data;
           isUserLoading = false;
         });
-        print("User Data: $userData");
+        //debugPrint("User Data: $userData");
       } else {
         throw Exception('Failed to load user');
       }
     } catch (e) {
-      print('Error fetching user: $e');
+      debugPrint('Error fetching user: $e');
       setState(() => isUserLoading = false);
+      _userError = 'Failed to load user';
     }
   }
 
-  Future<void> getUserWishlist() async {
+ Future<void> getUserWishlist() async {
   try {
     final uri = Uri.parse('http://10.0.2.2:8000/renter/getWishlist/${widget.userId}');
     final res = await http.get(uri);
     if (res.statusCode == 200) {
-      final data = jsonDecode(res.body);
-      final ids = extractVariantIdsFromWishlistResponse(data);
+      final ids = extractVariantIdsFromWishlistResponse(res.body); // works with raw JSON
       if (!mounted) return;
       setState(() => _isWishlisted = ids.contains(widget.variantId));
-    }
-  } catch (_) {/* ignore – not fatal */}
-}
-
-
-// Normalize common shapes to Set<String> of variant ids
-Set<String> extractVariantIdsFromWishlistResponse(dynamic data) {
-  final out = <String>{};
-
-  if (data is List) {
-    for (final item in data) {
-      if (item is String) out.add(item);
-      if (item is Map) {
-        final cv = item['carVariant'] ?? item['carVariantId'];
-        if (cv is String) out.add(cv);
-        if (cv is Map && cv['_id'] is String) out.add(cv['_id'] as String);
-      }
-    }
-    return out;
-  }
-
-  if (data is Map && data['wishlist'] is List) {
-    return extractVariantIdsFromWishlistResponse(data['wishlist']);
-  }
-
-  return out;
-}
-
-Future<void> _toggleWishlist() async {
-  if (_wishBusy) return;
-  setState(() => _wishBusy = true);
-
-  try {
-    final ok = _isWishlisted
-        ? await _removeFromWishlist()
-        : await _addToWishlist();
-
-    if (!mounted) return;
-    if (ok) {
-      setState(() => _isWishlisted = !_isWishlisted);
+      // If you also need the array for anything else:
+      // final List<String> idList = ids.toList(growable: false);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_isWishlisted ? 'Failed to remove from wishlist' : 'Failed to add to wishlist')),
-      );
+      debugPrint('Wishlist load failed: ${res.statusCode} ${res.body}');
     }
   } catch (e) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Wishlist error: $e')));
+    debugPrint('Wishlist load error: $e');
+  }
+}
+
+
+  // Normalize common shapes to Set<String> of variant ids
+Set<String> extractVariantIdsFromWishlistResponse(dynamic raw) {
+  final data = (raw is String) ? jsonDecode(raw) : raw;
+
+  // Normalize to a List
+  final list = data is List
+      ? data
+      : (data is Map && data['wishlist'] is List)
+          ? data['wishlist']
+          : (data is Map && data['data'] is List)
+              ? data['data']
+              : const [];
+
+  // Each item is a carVariant; its ID is the top-level "_id"
+  return list
+      .whereType<Map>()
+      .map((m) => m['_id']?.toString())
+      .whereType<String>()
+      .toSet();
+}
+
+  Future<void> _toggleWishlist() async {
+    if (_wishBusy) return;
+    setState(() => _wishBusy = true);
+
+    try {
+      final wantRemove = _isWishlisted;
+      final ok = wantRemove ? await _removeFromWishlist() : await _addToWishlist();
+
+      if (!mounted) return;
+      if (ok) {
+        setState(() => _isWishlisted = !_isWishlisted);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              wantRemove ? 'Failed to remove from wishlist' : 'Failed to add to wishlist',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Wishlist error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _wishBusy = false);
+    }
   }
 
-  if (!mounted) return;
-  setState(() => _wishBusy = false);
-}
+  Future<bool> _addToWishlist() async {
+    final uri = Uri.parse(
+      'http://10.0.2.2:8000/renter/addToWishlist/${widget.userId}/${widget.variantId}',
+    );
+    final res = await http.post(uri); // POST
+    final ok = (res.statusCode >= 200 && res.statusCode < 300) || res.statusCode == 409; // already added
+    if (!ok) debugPrint('ADD wishlist failed: ${res.statusCode} ${res.body}');
+    return ok;
+  }
 
-Future<bool> _addToWishlist() async {
-  final uri = Uri.parse('http://10.0.2.2:8000/renter/addToWishlist/${widget.userId}/${widget.variantId}');
-  final res = await http.put(uri);
-  return res.statusCode == 200 || res.statusCode == 201;
-}
-
-// TODO: if your server uses a different route/method, change REMOVE_URL or switch to DELETE.
-Future<bool> _removeFromWishlist() async {
-  final uri = Uri.parse('http://10.0.2.2:8000/renter/removeFromWishlist/${widget.userId}/${widget.variantId}');
-  final res = await http.put(uri); // or http.delete(uri) if your API uses DELETE
-  return res.statusCode == 200 || res.statusCode == 204;
-}
-
+  Future<bool> _removeFromWishlist() async {
+    final uri = Uri.parse(
+      'http://10.0.2.2:8000/renter/removeFromWishlist/${widget.userId}/${widget.variantId}',
+    );
+    final res = await http.post(uri); // POST
+    final ok = (res.statusCode >= 200 && res.statusCode < 300) || res.statusCode == 404; // already removed
+    if (!ok) debugPrint('REMOVE wishlist failed: ${res.statusCode} ${res.body}');
+    return ok;
+  }
 
   String get _preferredCurrency {
     final c =
@@ -168,47 +183,45 @@ Future<bool> _removeFromWishlist() async {
 
   String _currencySymbol(String code) {
     switch (code.toUpperCase()) {
-      case 'USD': return r'$';
-      case 'EUR': return '€';
-      case 'GBP': return '£';
-      case 'SAR': return '﷼';
-      case 'AED': return 'د.إ';
+      case 'USD':
+        return r'$';
+      case 'EUR':
+        return '€';
+      case 'GBP':
+        return '£';
+      case 'SAR':
+        return '﷼';
+      case 'AED':
+        return 'د.إ';
       case 'EGP':
-      default:    return 'EGP';
+      default:
+        return 'EGP';
     }
   }
 
- // Convert an amount stored in **AED** to the user’s preferred currency.
-// Your fx map is "EGP per 1 unit of currency". We use cross-rate math:
-//
-// value_in_target = amount_in_AED * (EGP_per_AED / EGP_per_target)
-String _formatMoneyFromAED(num aedAmount, {String? to}) {
-  final code = (to ?? _preferredCurrency).toUpperCase();
+  // Convert amount stored in **AED** → preferred currency.
+  // fx map is "EGP per 1 unit". Cross-rate:
+  // value_in_target = amount_in_AED * (EGP_per_AED / EGP_per_target)
+  String _formatMoneyFromAED(num aedAmount, {String? to}) {
+    final code = (to ?? _preferredCurrency).toUpperCase();
 
-  // EGP per 1 unit (from your userData['fxRates'] with sensible fallbacks)
-  final egpPer = _egpPerUnit;
-  final egpPerAED = egpPer['AED'] ?? 13.6; // fallback if backend didn't send
-  final egpPerTarget = egpPer[code] ?? 1.0;
+    final egpPer = _egpPerUnit;                // EGP per 1 unit
+    final egpPerAED = egpPer['AED'] ?? 13.6;   // fallback if backend didn't send
+    final egpPerTarget = egpPer[code] ?? 1.0;
 
-  final double value = (code == 'AED')
-      ? aedAmount.toDouble()
-      : aedAmount.toDouble() * (egpPerAED / egpPerTarget);
+    final double value =
+        (code == 'AED') ? aedAmount.toDouble() : aedAmount.toDouble() * (egpPerAED / egpPerTarget);
 
-  final sym = _currencySymbol(code);
-  final s = NumberFormat.decimalPattern().format(value.round());
-  return '$sym $s';
-}
+    final sym = _currencySymbol(code);
+    final s = NumberFormat.decimalPattern().format(value.round());
+    return '$sym $s';
+  }
+
   // ---------------- Variant fetch ----------------
-
- // import only if you keep .timeout:
-// import 'dart:async';
-
-
-
 
   Future<void> getVariantData() async {
     try {
-    final url = Uri.parse('http://10.0.2.2:8000/carVariant/${widget.variantId}');
+      final url = Uri.parse('http://10.0.2.2:8000/carVariant/${widget.variantId}');
       final response = await http.get(url);
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
@@ -216,17 +229,16 @@ String _formatMoneyFromAED(num aedAmount, {String? to}) {
           carVariantData = data;
           isVariantLoading = false;
         });
-        print("Car Variant Data: $userData");
+        //debugPrint("Car Variant Data: $carVariantData"); // fixed: was printing userData
       } else {
         throw Exception('Failed to load Car Variant');
       }
     } catch (e) {
-      print('Error fetching Car Variant: $e');
+      debugPrint('Error fetching Car Variant: $e');
       setState(() => isVariantLoading = false);
+      _variantError = 'Failed to load car variant';
     }
   }
-
-
 
   // ---------------- UI helpers ----------------
 
@@ -276,8 +288,8 @@ String _formatMoneyFromAED(num aedAmount, {String? to}) {
             : _DetailsView(
                 variant: carVariantData!,
                 imgIndex: _imgIndex,
-                onImgChanged: (i) => setState(() => _imgIndex = i),
-                money: _formatMoneyFromAED,          // <— was _formatMoneyFromEGP
+                onImgChanged: (i) => setState(() => _imgIndex = i), // ← updates dots
+                money: _formatMoneyFromAED,
                 colorFromName: _colorFromName,
                 fuelIcon: _fuelIcon,
                 transmissionIcon: _transmissionIcon,
@@ -287,19 +299,15 @@ String _formatMoneyFromAED(num aedAmount, {String? to}) {
                 isWishlisted: _isWishlisted,
                 wishBusy: _wishBusy,
                 onToggleWishlist: _toggleWishlist,
-               
               );
 
-
     return Scaffold(
-  backgroundColor: Colors.white,
-  appBar: AppBar(
-    title: const Text('Car details'),
-    //backgroundColor: Colors.blueAccent,
-  ),
-  body: body,
-);
-
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text('Car details'),
+      ),
+      body: body,
+    );
   }
 }
 
@@ -310,7 +318,7 @@ class _DetailsView extends StatelessWidget {
   final int imgIndex;
   final ValueChanged<int> onImgChanged;
 
-  final String Function(num egp, {String? to}) money;
+  final String Function(num aed, {String? to}) money;
   final Color Function(String name) colorFromName;
   final IconData Function(String fuel) fuelIcon;
   final IconData Function(String tr) transmissionIcon;
@@ -360,101 +368,117 @@ class _DetailsView extends StatelessWidget {
     final providerPhone = (provider['phone'] ?? provider['mobile'] ?? '').toString();
     final providerCity = (provider['city'] ?? '').toString();
 
-    final priceNum   = (variant['rentalPricePerDay'] is num) ? (variant['rentalPricePerDay'] as num) : 0;
-    final depositNum = (variant['depositAmount']   is num) ? (variant['depositAmount']   as num) : 0;
+    final priceNum = (variant['rentalPricePerDay'] is num) ? (variant['rentalPricePerDay'] as num) : 0;
+    final depositNum = (variant['depositAmount'] is num) ? (variant['depositAmount'] as num) : 0;
     final description = (variant['description'] ?? car['description'] ?? '').toString();
 
     return CustomScrollView(
       slivers: [
         // Image header without an AppBar
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 320,
-              child: Stack(
-                fit: StackFit.expand,
-                alignment: Alignment.bottomCenter,
-                children: [
-            PageView.builder(
-                itemCount: images.length,
-                itemBuilder: (context, i) {
-                  final src = images[i]?['filepath'] ?? '';
-                  return Center(
-                    child: SizedBox(
-                      width: 410,                 // <- exact width
-                      height: 280,                // <- exact height
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.network(
-                          src,
-                          fit: BoxFit.cover,
+        SliverToBoxAdapter(
+          child: SizedBox(
+            height: 320,
+            child: Stack(
+              fit: StackFit.expand,
+              alignment: Alignment.bottomCenter,
+              children: [
+                PageView.builder(
+                  itemCount: images.isEmpty ? 1 : images.length,
+                  onPageChanged: onImgChanged, // ← keep dots in sync
+                  itemBuilder: (context, i) {
+                    if (images.isEmpty) {
+                      return Center(
+                        child: SizedBox(
+                          width: 410,
+                          height: 280,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              color: Colors.grey.shade200,
+                              child: const Icon(Icons.directions_car_filled_outlined, size: 48),
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                    final src = images[i]?['filepath'] ?? '';
+                    return Center(
+                      child: SizedBox(
+                        width: 410, // exact width
+                        height: 280, // exact height
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(
+                            src,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: Colors.grey.shade200,
+                              child: const Icon(Icons.directions_car_filled_outlined, size: 48),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+
+                // dots
+                if (images.length > 1)
+                  Positioned(
+                    bottom: 10,
+                    left: 0,
+                    right: 0,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        images.length,
+                        (i) => Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                          width: imgIndex == i ? 10 : 6,
+                          height: imgIndex == i ? 10 : 6,
+                          decoration: BoxDecoration(
+                            color: imgIndex == i ? Colors.white : Colors.white54,
+                            shape: BoxShape.circle,
+                          ),
                         ),
                       ),
                     ),
-                  );
-                },
-              ),
-            
-        // dots
-        if ((images.isNotEmpty ? images.length : 1) > 1)
-          Positioned(
-            bottom: 10,
-            left: 0,
-            right: 0,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(
-                images.length,
-                (i) => Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 3),
-                  width: imgIndex == i ? 10 : 6,
-                  height: imgIndex == i ? 10 : 6,
-                  decoration: BoxDecoration(
-                    color: imgIndex == i ? Colors.white : Colors.white54,
-                    shape: BoxShape.circle,
+                  ),
+
+                // Heart overlay (top-right of the image header)
+                Positioned(
+                  top: 20,
+                  right: 12,
+                  child: Material(
+                    color: Colors.black45,
+                    shape: const CircleBorder(),
+                    child: SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: wishBusy
+                          ? const Center(
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              ),
+                            )
+                          : IconButton(
+                              onPressed: onToggleWishlist,
+                              icon: Icon(
+                                isWishlisted ? Icons.favorite : Icons.favorite_border,
+                                color: isWishlisted ? Colors.redAccent : Colors.white,
+                              ),
+                              tooltip: isWishlisted ? 'Remove from wishlist' : 'Add to wishlist',
+                            ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
           ),
-
-        // optional favorite button overlay (replaces SliverAppBar action)
-       // Heart overlay (top-right of the image header)
-          Positioned(
-            top: 20,
-            right: 12,
-            child: Material(
-              color: Colors.black45,
-              shape: const CircleBorder(),
-              child: SizedBox(
-                width: 40,
-                height: 40,
-                child: wishBusy
-                    ? const Center(
-                        child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        ),
-                      )
-                    : IconButton(
-                        onPressed: onToggleWishlist,
-                        icon: Icon(
-                          isWishlisted ? Icons.favorite : Icons.favorite_border,
-                          color: isWishlisted ? Colors.redAccent : Colors.white,
-                        ),
-                        tooltip: isWishlisted ? 'Remove from wishlist' : 'Add to wishlist',
-                      ),
-              ),
-            ),
-          ),
-
-      ],
-    ),
-  ),
-),
-
- 
+        ),
 
         SliverToBoxAdapter(
           child: Padding(
@@ -467,19 +491,25 @@ class _DetailsView extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: Text(title.isEmpty ? 'Car details' : title,
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+                      child: Text(
+                        title.isEmpty ? 'Car details' : title,
+                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+                      ),
                     ),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         if (priceNum > 0)
-                          Text('${money(priceNum)}/day',
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                          Text(
+                            '${money(priceNum)}/day',
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                          ),
                         if (depositNum > 0) const SizedBox(height: 2),
                         if (depositNum > 0)
-                          Text('Deposit: ${money(depositNum)}',
-                              style: const TextStyle(color: Colors.black54)),
+                          Text(
+                            'Deposit: ${money(depositNum)}',
+                            style: const TextStyle(color: Colors.black54),
+                          ),
                       ],
                     ),
                   ],
@@ -493,18 +523,13 @@ class _DetailsView extends StatelessWidget {
                   children: [
                     if (providerName.isNotEmpty)
                       _SpecChip(icon: Icons.store_mall_directory, label: providerName),
-                    if (category.isNotEmpty)
-                      _SpecChip(icon: Icons.category_outlined, label: category),
-                    if (color.isNotEmpty)
-                      _ColorChip(colorName: color, color: colorFromName(color)),
-                    if (fuel.isNotEmpty)
-                      _SpecChip(icon: fuelIcon(fuel), label: fuel),
+                    if (category.isNotEmpty) _SpecChip(icon: Icons.category_outlined, label: category),
+                    if (color.isNotEmpty) _ColorChip(colorName: color, color: colorFromName(color)),
+                    if (fuel.isNotEmpty) _SpecChip(icon: fuelIcon(fuel), label: fuel),
                     if (transmission.isNotEmpty)
                       _SpecChip(icon: transmissionIcon(transmission), label: transmission),
-                    if (seats.isNotEmpty)
-                      _SpecChip(icon: Icons.event_seat, label: seatLabel(seats)),
-                    if (year.isNotEmpty)
-                      _SpecChip(icon: Icons.calendar_month_outlined, label: 'Model $year'),
+                    if (seats.isNotEmpty) _SpecChip(icon: Icons.event_seat, label: seatLabel(seats)),
+                    if (year.isNotEmpty) _SpecChip(icon: Icons.calendar_month_outlined, label: 'Model $year'),
                   ],
                 ),
 
@@ -635,8 +660,13 @@ class _ColorChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 12, height: 12,
-            decoration: BoxDecoration(shape: BoxShape.circle, color: color, border: Border.all(color: Colors.black12)),
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color,
+              border: Border.all(color: Colors.black12),
+            ),
           ),
           const SizedBox(width: 6),
           Text(colorName, style: const TextStyle(fontSize: 12)),

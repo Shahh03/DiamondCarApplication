@@ -28,7 +28,9 @@ class _RenterSearchState extends State<RenterSearch> {
   String? selectedTransmission;
   String? selectedFuel;
   int? selectedSeats;
-  RangeValues? selectedPrice; // EGP
+
+  // NOTE: Range slider values are kept in the DB's base currency (AED).
+  RangeValues? selectedPrice; // AED  <<< CHANGED: clarified base unit
   RangeValues? selectedYear;  // model year
 
   // ====== Filter options / bounds (derived from data) ======
@@ -38,10 +40,13 @@ class _RenterSearchState extends State<RenterSearch> {
   List<String> fuels = [];
   List<int> seatsOptions = [];
 
-  double priceMin = 0, priceMax = 0;
+  double priceMin = 0, priceMax = 0; // AED  <<< CHANGED: clarified base unit
   double yearMin = 0, yearMax = 0;
 
   bool get isLoading => isUserLoading || isCarsLoading;
+
+  // --- NEW: declare base currency code used in your DB ---
+  static const String _BASE_CCY = 'AED'; // <<< CHANGED: AED is the stored unit
 
   @override
   void initState() {
@@ -72,75 +77,79 @@ class _RenterSearchState extends State<RenterSearch> {
 
   // ===== Currency helpers =====
 
-// Read the user’s preferred currency from the loaded user object.
-// Adjust the keys if your backend uses different names.
-String get _preferredCurrency {
-  final c =
-      userData?['currency'] ??
-      userData?['preferredCurrency'] ??
-      userData?['settings']?['currency'] ??
-      'EGP';
-  return c.toString().toUpperCase();
-}
+  // Read the user’s preferred currency from the loaded user object.
+  String get _preferredCurrency {
+    final c =
+        userData?['currency'] ??
+        userData?['preferredCurrency'] ??
+        userData?['settings']?['currency'] ??
+        'EGP';
+    return c.toString().toUpperCase();
+  }
 
-// Try to read FX rates (EGP per 1 unit of currency) from the user profile,
-// falling back to sensible placeholders if not present.
-// Example shape you can send from backend:
-// user.currency = "USD"
-// user.fxRates = { "USD": 50.0, "EUR": 54.0, "GBP": 64.0, "SAR": 13.3, "AED": 13.6 }
-Map<String, double> get _egpPerUnit {
-  final m = <String, double>{'EGP': 1};
-  final fx = userData?['fxRates'];
-  if (fx is Map) {
-    for (final e in fx.entries) {
-      final k = e.key.toString().toUpperCase();
-      final v = (e.value is num) ? (e.value as num).toDouble() : null;
-      if (v != null && v > 0) m[k] = v;
+  // We expect fxRates as **EGP per 1 unit** of the currency, e.g.:
+  // { "USD": 50.0, "EUR": 54.0, "GBP": 64.0, "SAR": 13.3, "AED": 13.6, "EGP": 1 }
+  Map<String, double> get _egpPerUnit {
+    final m = <String, double>{'EGP': 1};
+    final fx = userData?['fxRates'];
+    if (fx is Map) {
+      for (final e in fx.entries) {
+        final k = e.key.toString().toUpperCase();
+        final v = (e.value is num) ? (e.value as num).toDouble() : null;
+        if (v != null && v > 0) m[k] = v;
+      }
+    }
+    // Fallbacks
+    m.putIfAbsent('USD', () => 50.0);
+    m.putIfAbsent('EUR', () => 54.0);
+    m.putIfAbsent('GBP', () => 64.0);
+    m.putIfAbsent('SAR', () => 13.3);
+    m.putIfAbsent('AED', () => 13.6);
+    return m;
+  }
+
+  double _egpPer(String code) => _egpPerUnit[code.toUpperCase()] ?? 1.0;
+
+  String _currencySymbol(String code) {
+    switch (code.toUpperCase()) {
+      case 'USD':
+        return r'$';
+      case 'EUR':
+        return '€';
+      case 'GBP':
+        return '£';
+      case 'SAR':
+        return '﷼';
+      case 'AED':
+        return 'د.إ';
+      case 'EGP':
+      default:
+        return 'EGP';
     }
   }
-  // fallbacks in case backend didn't send
-  m.putIfAbsent('USD', () => 50.0);
-  m.putIfAbsent('EUR', () => 54.0);
-  m.putIfAbsent('GBP', () => 64.0);
-  m.putIfAbsent('SAR', () => 13.3);
-  m.putIfAbsent('AED', () => 13.6);
-  return m;
-}
 
-String _currencySymbol(String code) {
-  switch (code.toUpperCase()) {
-    case 'USD':
-      return r'$';
-    case 'EUR':
-      return '€';
-    case 'GBP':
-      return '£';
-    case 'SAR':
-      return '﷼';
-    case 'AED':
-      return 'د.إ';
-    case 'EGP':
-    default:
-      return 'EGP';
+  // Convert an amount stored in **AED** (DB base) to the user's preferred currency,
+  // formatting as a label (no decimals).
+  // Math: amount[AED] -> EGP via egpPer(AED) -> Target via divide egpPer(Target).
+  String _formatMoneyFromBase(num baseAmount, {String? to}) { // <<< CHANGED: new converter
+    final target = (to ?? _preferredCurrency).toUpperCase();
+    final sym = _currencySymbol(target);
+
+    double value;
+    if (target == _BASE_CCY) {
+      value = baseAmount.toDouble();
+    } else if (target == 'EGP') {
+      value = baseAmount.toDouble() * _egpPer(_BASE_CCY);
+    } else {
+      // Convert AED -> EGP -> target
+      final egpPerBase = _egpPer(_BASE_CCY);
+      final egpPerTarget = _egpPer(target);
+      value = baseAmount.toDouble() * egpPerBase / egpPerTarget;
+    }
+
+    final s = NumberFormat.decimalPattern().format(value.round());
+    return (target == 'EGP') ? '$sym $s' : '$sym $s';
   }
-}
-
-// Convert an amount that’s stored in **EGP** to the user’s preferred currency
-// and return a formatted label (0 decimals, with thousands separators).
-String _formatMoneyFromEGP(num egpAmount, {String? to}) {
-  final code = (to ?? _preferredCurrency).toUpperCase();
-  final egpPer1 = _egpPerUnit[code] ?? 1.0;        // EGP per 1 unit of target
-  final value = (code == 'EGP')
-      ? egpAmount.toDouble()
-      : egpAmount.toDouble() / egpPer1;
-  final sym = _currencySymbol(code);
-
-  // no cents for daily car pricing
-  final s = NumberFormat.decimalPattern().format(value.round());
-  // For EGP we print "EGP 1,234"; for others "$ 1,234"
-  return (code == 'EGP') ? '$sym $s' : '$sym $s';
-}
-
 
   Future<void> getAllAvailableCarVariants() async {
     try {
@@ -180,7 +189,7 @@ String _formatMoneyFromEGP(num egpAmount, {String? to}) {
     final transmissionSet = <String>{};
     final fuelSet = <String>{};
     final seatsSet = <int>{};
-    double? pMin, pMax;
+    double? pMin, pMax; // in AED (DB base)  <<< CHANGED: comment
     int? yMin, yMax;
 
     for (final v in carVariants) {
@@ -191,7 +200,7 @@ String _formatMoneyFromEGP(num egpAmount, {String? to}) {
       final fu = (car['fuelType'] ?? '').toString().trim();
       final st = car['seats'];
       final y = car['year'];
-      final price = v['rentalPricePerDay'];
+      final price = v['rentalPricePerDay']; // AED
 
       if (b.isNotEmpty) brandSet.add(b);
       if (c.isNotEmpty) categorySet.add(c);
@@ -200,7 +209,7 @@ String _formatMoneyFromEGP(num egpAmount, {String? to}) {
       if (st is int) seatsSet.add(st);
 
       if (price is num) {
-        final d = price.toDouble();
+        final d = price.toDouble(); // AED
         pMin = (pMin == null) ? d : (d < pMin! ? d : pMin);
         pMax = (pMax == null) ? d : (d > pMax! ? d : pMax);
       }
@@ -223,13 +232,13 @@ String _formatMoneyFromEGP(num egpAmount, {String? to}) {
       fuels = fuL;
       seatsOptions = se;
 
-      priceMin = (pMin ?? 0);
-      priceMax = (pMax ?? 0);
+      priceMin = (pMin ?? 0); // AED
+      priceMax = (pMax ?? 0); // AED
       yearMin = (yMin ?? 0).toDouble();
       yearMax = (yMax ?? 0).toDouble();
 
       // default ranges cover all values (means "no filter")
-      if (priceMin <= priceMax) selectedPrice = RangeValues(priceMin, priceMax);
+      if (priceMin <= priceMax) selectedPrice = RangeValues(priceMin, priceMax); // AED
       if (yearMin <= yearMax) selectedYear = RangeValues(yearMin, yearMax);
     });
   }
@@ -252,7 +261,7 @@ String _formatMoneyFromEGP(num egpAmount, {String? to}) {
           v['color'],
           car['fuelType'],
           car['transmission'],
-          v['rentalPricePerDay']?.toString(),
+          v['rentalPricePerDay']?.toString(), // AED raw
         ].where((x) => x != null).join(' ').toString().toLowerCase();
 
         if (!hay.contains(q)) return false;
@@ -285,10 +294,10 @@ String _formatMoneyFromEGP(num egpAmount, {String? to}) {
         if (st is! int || st != selectedSeats) return false;
       }
 
-      // Price range
+      // Price range (values stored & compared in AED)
       if (selectedPrice != null && priceMin < priceMax) {
         final price = v['rentalPricePerDay'];
-        final p = (price is num) ? price.toDouble() : null;
+        final p = (price is num) ? price.toDouble() : null; // AED
         if (p == null) return false;
         if (p < selectedPrice!.start || p > selectedPrice!.end) return false;
       }
@@ -502,11 +511,11 @@ String _formatMoneyFromEGP(num egpAmount, {String? to}) {
 
   final TextEditingController _searchCtrl = TextEditingController();
 
-@override
-void dispose() {
-  _searchCtrl.dispose();
-  super.dispose();
-}
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   // ====== UI ======
   @override
@@ -528,56 +537,51 @@ void dispose() {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                    
-
                       Row(
-  children: [
-    Expanded(
-      child: TextField(
-        controller: _searchCtrl,
-        onChanged: (v) => setState(() => query = v),
-        decoration: InputDecoration(
-          prefixIcon: const Icon(Icons.search),
-          hintText: 'Search brand, model, provider, color…',
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          isDense: true,
-        ),
-      ),
-    ),
-    const SizedBox(width: 8),
-    // Clear filters + search
-    OutlinedButton.icon(
-      onPressed: () {
-        setState(() {
-          // clear search text & query
-          query = '';
-          _searchCtrl.clear();
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _searchCtrl,
+                              onChanged: (v) => setState(() => query = v),
+                              decoration: InputDecoration(
+                                prefixIcon: const Icon(Icons.search),
+                                hintText: 'Search brand, model, provider, color…',
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                isDense: true,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Clear filters + search
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                query = '';
+                                _searchCtrl.clear();
 
-          // reset all filters
-          selectedBrand = null;
-          selectedCategory = null;
-          selectedTransmission = null;
-          selectedFuel = null;
-          selectedSeats = null;
-          if (priceMax > priceMin) {
-            selectedPrice = RangeValues(priceMin, priceMax);
-          }
-          if (yearMax > yearMin) {
-            selectedYear = RangeValues(yearMin, yearMax);
-          }
-        });
-      },
-      icon: const Icon(Icons.filter_alt_off_rounded),
-      label: const Text('Clear'),
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    ),
-  ],
-),
-const SizedBox(height: 10),
-
+                                selectedBrand = null;
+                                selectedCategory = null;
+                                selectedTransmission = null;
+                                selectedFuel = null;
+                                selectedSeats = null;
+                                if (priceMax > priceMin) {
+                                  selectedPrice = RangeValues(priceMin, priceMax); // AED
+                                }
+                                if (yearMax > yearMin) {
+                                  selectedYear = RangeValues(yearMin, yearMax);
+                                }
+                              });
+                            },
+                            icon: const Icon(Icons.filter_alt_off_rounded),
+                            label: const Text('Clear'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
 
                       // ===== Filter boxes =====
                       SingleChildScrollView(
@@ -605,22 +609,22 @@ const SizedBox(height: 10),
                               ),
                             ),
                             _FilterButton(
+                              // Display preferred currency, but slider values are AED
                               label: (selectedPrice != null && priceMax > priceMin)
-                              ? '${_formatMoneyFromEGP(selectedPrice!.start)} - ${_formatMoneyFromEGP(selectedPrice!.end)}'
-                              : 'Price range',
+                                  ? '${_formatMoneyFromBase(selectedPrice!.start)} - ${_formatMoneyFromBase(selectedPrice!.end)}' // <<< CHANGED
+                                  : 'Price range',
                               icon: Icons.price_change_outlined,
                               onTap: () {
                                 if (priceMax <= priceMin) return;
                                 _openRangeSheet(
-                                title: 'Price per day (${_preferredCurrency})',
-                                min: priceMin,
-                                max: priceMax,
-                                current: selectedPrice ?? RangeValues(priceMin, priceMax),
-                                onApplied: (val) => setState(() => selectedPrice = val),
-                                // v is in EGP internally; we only change how it’s *displayed*
-                                formatValue: (v) => _formatMoneyFromEGP(v),
-                              );
-
+                                  title: 'Price per day (${_preferredCurrency})',
+                                  min: priceMin, // AED
+                                  max: priceMax, // AED
+                                  current: selectedPrice ?? RangeValues(priceMin, priceMax),
+                                  onApplied: (val) => setState(() => selectedPrice = val),
+                                  // `v` is AED internally; only change how it’s displayed
+                                  formatValue: (v) => _formatMoneyFromBase(v), // <<< CHANGED
+                                );
                               },
                             ),
                             _FilterButton(
@@ -664,7 +668,6 @@ const SizedBox(height: 10),
                                 onSelected: (val) => setState(() => selectedFuel = val),
                               ),
                             ),
-
                           ],
                         ),
                       ),
@@ -677,7 +680,7 @@ const SizedBox(height: 10),
                       ),
                       const SizedBox(height: 12),
 
-                      // ===== Results list (same card style as MyRentals) =====
+                      // ===== Results list =====
                       Expanded(
                         child: ListView.builder(
                           itemCount: filtered.length,
@@ -697,8 +700,8 @@ const SizedBox(height: 10),
                             final fuel = (car['fuelType'] ?? '').toString();
                             final transmission = (car['transmission'] ?? '').toString();
                             final seats = (car['seats'] ?? '').toString();
-                            final price = v['rentalPricePerDay']?.toString() ?? '';
-                            final deposit = v['depositAmount']?.toString() ?? '';
+                            final priceStr = v['rentalPricePerDay']?.toString() ?? ''; // AED
+                            final depositStr = v['depositAmount']?.toString() ?? '';  // AED (assumed)
 
                             return Card(
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -796,10 +799,9 @@ const SizedBox(height: 10),
                                                       leading: Icon(_transmissionIcon(transmission), size: 16),
                                                       label: transmission,
                                                     ),
-                                                 
                                                   if (seats.isNotEmpty)
                                                     FramedInfo(
-                                                      leading: Icon(Icons.event_seat, size: 16),
+                                                      leading: const Icon(Icons.event_seat, size: 16),
                                                       label: _seatLabel(seats),
                                                     ),
                                                 ],
@@ -808,23 +810,28 @@ const SizedBox(height: 10),
 
                                             const SizedBox(width: 8),
 
-                                            // RIGHT: price/deposit
-                                           Builder(builder: (_) {
-                                            final priceNum   = num.tryParse(price) ?? 0;
-                                            final depositNum = num.tryParse(deposit) ?? 0;
+                                            // RIGHT: price/deposit (convert from AED to preferred)
+                                            Builder(builder: (_) {
+                                              final priceNum   = num.tryParse(priceStr) ?? 0;
+                                              final depositNum = num.tryParse(depositStr) ?? 0;
 
-                                            return Column(
-                                              crossAxisAlignment: CrossAxisAlignment.end,
-                                              children: [
-                                                if (priceNum > 0)
-                                                  Text('${_formatMoneyFromEGP(priceNum)}/day', style: const TextStyle(fontWeight: FontWeight.w700)),
-                                                if (depositNum > 0) const SizedBox(height: 2),
-                                                if (depositNum > 0)
-                                                  Text('Deposit: ${_formatMoneyFromEGP(depositNum)}', style: const TextStyle(fontSize: 12, color: Colors.black54)),
-                                              ],
-                                            );
-                                          }),
-
+                                              return Column(
+                                                crossAxisAlignment: CrossAxisAlignment.end,
+                                                children: [
+                                                  if (priceNum > 0)
+                                                    Text(
+                                                      '${_formatMoneyFromBase(priceNum)}/day', // <<< CHANGED
+                                                      style: const TextStyle(fontWeight: FontWeight.w700),
+                                                    ),
+                                                  if (depositNum > 0) const SizedBox(height: 2),
+                                                  if (depositNum > 0)
+                                                    Text(
+                                                      'Deposit: ${_formatMoneyFromBase(depositNum)}', // <<< CHANGED
+                                                      style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                                    ),
+                                                ],
+                                              );
+                                            }),
                                           ],
                                         ),
 
@@ -832,20 +839,19 @@ const SizedBox(height: 10),
                                         Align(
                                           alignment: Alignment.center,
                                           child: ElevatedButton(
-                                             onPressed: () {
-                                                final variantId = (v['_id'] ?? '').toString();
-                                                if (variantId.isEmpty) return;
+                                            onPressed: () {
+                                              final variantId = (v['_id'] ?? '').toString();
+                                              if (variantId.isEmpty) return;
 
-                                                Navigator.of(context).push(
-                                                  MaterialPageRoute(
-                                                    builder: (_) => CarVariantDetails(
-                                                      variantId: variantId,
-                                                      userId: widget.id,
-                                                    ),
+                                              Navigator.of(context).push(
+                                                MaterialPageRoute(
+                                                  builder: (_) => CarVariantDetails(
+                                                    variantId: variantId,
+                                                    userId: widget.id,
                                                   ),
-                                                );
-                                              },
-
+                                                ),
+                                              );
+                                            },
                                             style: ElevatedButton.styleFrom(
                                               elevation: 4,
                                               backgroundColor: Colors.blueAccent,
@@ -858,9 +864,6 @@ const SizedBox(height: 10),
                                             ),
                                             child: const Text('View Details'),
                                           ),
-
-                                         
-
                                         ),
                                       ],
                                     ),

@@ -20,7 +20,7 @@ router.put("/renter/changePassword/:renterId", changeRenterPassword); //works
 
 router.get("/renter/getWishlist/:renterId", getWishlistforRenter); //works
 
-router.delete("/renter/removeFromWishlist/:renterId/:carVariantId", removeFromWishlist); //works ig
+router.post("/renter/removeFromWishlist/:renterId/:carVariantId", removeFromWishlist); //works ig
 
 router.post("/renter/addToWishlist/:renterId/:carVariantId", addToWishlist); //works
 
