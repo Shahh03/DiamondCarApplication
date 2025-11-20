@@ -340,3 +340,24 @@ export const addToWishlist = async (req, res) => {
     res.status(500).json({ message: error.message });
   } 
 }
+
+export const getUpcomingBookingsForRenter = async (req, res) => {
+  try {
+    const { renterId } = req.params;
+
+    const bookings = await Booking.find({ renter: renterId, status: 'Confirmed' })
+      .populate({
+        path: 'carVariant',
+        populate: {
+          path: 'car',
+        },
+      })
+      .populate('payment');
+    
+    res.status(200).json(bookings);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+  
+}
+

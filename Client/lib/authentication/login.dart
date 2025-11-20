@@ -63,7 +63,7 @@ if (response.statusCode == 200 || response.statusCode == 201) {
   Navigator.pushReplacement(
     context,
     MaterialPageRoute(
-      builder: (context) => RenterHome(id: id),
+      builder: (context) => RenterHome(renterId: id),
     ),
   );
 } else if (type == 'Provider') {

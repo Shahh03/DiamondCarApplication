@@ -1,6 +1,5 @@
 import express from "express";
-import {getAllRenters, getRenterbyId ,getBookingsForRenter , updateRenter , updateRenterCurrency , changeRenterUsername , changeRenterPassword , getWishlistforRenter , removeFromWishlist ,changeRenterProfilePicture , addToWishlist} from "../controllers/renter/renter.controller.js";
-import { get } from "mongoose";
+import {getAllRenters, getRenterbyId ,getBookingsForRenter , updateRenter , updateRenterCurrency , changeRenterUsername , changeRenterPassword , getWishlistforRenter , getUpcomingBookingsForRenter ,removeFromWishlist ,changeRenterProfilePicture , addToWishlist} from "../controllers/renter/renter.controller.js";
 import {renterUpload  } from "../middlewares/upload.js";
 const router = express.Router();
  
@@ -23,6 +22,8 @@ router.get("/renter/getWishlist/:renterId", getWishlistforRenter); //works
 router.post("/renter/removeFromWishlist/:renterId/:carVariantId", removeFromWishlist); //works ig
 
 router.post("/renter/addToWishlist/:renterId/:carVariantId", addToWishlist); //works
+
+router.get("/renter/getUpcomingBookings/:renterId", getUpcomingBookingsForRenter);
 
 
 //router.post("/renter/changeProfilePicture/:renterId", changeRenterProfilePicture);

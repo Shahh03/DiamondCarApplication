@@ -21,7 +21,7 @@ class BottomNavBar extends StatelessWidget {
 
     switch (index) {
       case 0:
-        destination = RenterHome(id: userId);
+        destination = RenterHome(renterId: userId);
         break;
       case 1:
         destination = RenterSearch(id: userId);
