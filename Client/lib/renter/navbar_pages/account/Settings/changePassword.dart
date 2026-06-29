@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import '../../../api/renter_api.dart';
 import '../account.dart';
-
 class ChangePasswordPage extends StatefulWidget {
   final String userId;
 
@@ -18,6 +16,14 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
   final TextEditingController _confirmPasswordController = TextEditingController();
 
   bool isLoading = false;
+
+   @override
+  void dispose() {
+    _oldPasswordController.dispose();
+    _newPasswordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
 
  Future<void> _changePassword() async {
   final oldPassword = _oldPasswordController.text.trim();
@@ -41,34 +47,31 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
   setState(() => isLoading = true);
 
   try {
-    final response = await http.put(
-      Uri.parse('http://10.0.2.2:8000/renter/changePassword/${widget.userId}'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'oldPassword': oldPassword,
-        'newPassword': newPassword,
-      }),
+    final message = await RenterApi.changePassword(
+      userId: widget.userId,
+      oldPassword: oldPassword,
+      newPassword: newPassword,
     );
 
-    final responseBody = jsonDecode(response.body);
-    final message = responseBody['message'] ?? 'Unknown response';
+    if (!mounted) return;
 
-    if (response.statusCode == 200) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),);
-      _showSuccessDialog(); // if you want a dialog too
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $message')),
-      );
-    }
-  } catch (e) {
-    print('Error: $e');
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${e.toString()}')),
+      SnackBar(content: Text(message)),
+    );
+
+    _showSuccessDialog();
+  } catch (e) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(e.toString().replaceFirst('Exception: ', '')),
+      ),
     );
   } finally {
-    setState(() => isLoading = false);
+    if (mounted) {
+      setState(() => isLoading = false);
+    }
   }
 }
 
@@ -77,7 +80,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
   showDialog(
     context: context,
     barrierDismissible: false,
-    builder: (context) => AlertDialog(
+    builder: (dialogContext) => AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       backgroundColor: Colors.white,
       title: Row(
@@ -101,10 +104,14 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
             ),
           ),
           onPressed: () {
-             Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => RenterProfile(id: widget.userId)),
-        );
+            Navigator.pop(dialogContext);
+
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => RenterProfile(id: widget.userId),
+              ),
+            );
           },
           child: const Padding(
             padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),

@@ -1,7 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+
+import '../../../api/renter_api.dart';
 import 'bookCarVariant.dart';
 
 class WishlistPage extends StatefulWidget {
@@ -32,78 +32,85 @@ class _WishlistPageState extends State<WishlistPage> {
 
   // ---------------- Data fetch ----------------
 
-  Future<void> _getUser() async {
-    try {
-      final res = await http.get(Uri.parse('http://10.0.2.2:8000/user/${widget.renterId}'));
-      if (res.statusCode >= 200 && res.statusCode < 300) {
-        setState(() {
-          userData = jsonDecode(res.body);
-          isUserLoading = false;
-        });
-      } else {
-        throw Exception('User load failed');
-      }
-    } catch (e) {
-      debugPrint('User error: $e');
-      setState(() {
-        isUserLoading = false;
-      });
-    }
-  }
 
-  Future<void> _fetchWishlist() async {
-    try {
-      final response = await http.get(
-        Uri.parse("http://10.0.2.2:8000/renter/getWishlist/${widget.renterId}"),
-      );
+ Future<void> _getUser() async {
+  try {
+    final data = await RenterApi.getUserById(widget.renterId);
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        setState(() {
-          wishlist = data;
-          isWishlistLoading = false;
-        });
-      } else {
-        throw Exception("Failed to load wishlist");
-      }
-    } catch (e) {
-      setState(() {
-        hasError = true;
-        isWishlistLoading = false;
-      });
-    }
+    if (!mounted) return;
+
+    setState(() {
+      userData = data;
+      isUserLoading = false;
+    });
+  } catch (e) {
+    debugPrint('User error: $e');
+
+    if (!mounted) return;
+
+    setState(() {
+      isUserLoading = false;
+    });
   }
+}
+ Future<void> _fetchWishlist() async {
+  try {
+    final data = await RenterApi.getWishlist(widget.renterId);
+
+    if (!mounted) return;
+
+    setState(() {
+      wishlist = data;
+      isWishlistLoading = false;
+      hasError = false;
+    });
+  } catch (e) {
+    debugPrint('Wishlist error: $e');
+
+    if (!mounted) return;
+
+    setState(() {
+      hasError = true;
+      isWishlistLoading = false;
+    });
+  }
+}
 
   // ---------------- Wishlist actions ----------------
 
   Future<void> _removeFromWishlist(String carVariantId) async {
-    try {
-      // Your API uses POST for remove (to match your earlier routes)
-      final response = await http.post(
-        Uri.parse("http://10.0.2.2:8000/renter/removeFromWishlist/${widget.renterId}/$carVariantId"),
-      );
+  try {
+    final ok = await RenterApi.removeFromWishlist(
+      widget.renterId,
+      carVariantId,
+    );
 
-      final ok = (response.statusCode >= 200 && response.statusCode < 300) || response.statusCode == 404;
-      if (ok) {
-        setState(() {
-          wishlist.removeWhere((e) => (e['_id']?.toString() ?? '') == carVariantId);
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Removed from wishlist'), backgroundColor: Colors.green),
-          );
-        }
-      } else {
-        throw Exception("Failed to remove (${response.statusCode})");
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e")),
+    if (!mounted) return;
+
+    if (ok) {
+      setState(() {
+        wishlist.removeWhere(
+          (e) => (e['_id']?.toString() ?? '') == carVariantId,
         );
-      }
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Removed from wishlist'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      throw Exception('Failed to remove from wishlist');
     }
+  } catch (e) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Error: $e")),
+    );
   }
+}
 
   void _showConfirmationDialog(String carVariantId) {
     showDialog(

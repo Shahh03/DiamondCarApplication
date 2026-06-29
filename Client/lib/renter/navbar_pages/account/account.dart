@@ -1,8 +1,6 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
 import 'package:project/renter/navbar_pages/bottom_nav_bar.dart';
@@ -11,9 +9,9 @@ import 'editProfile.dart';
 import 'currencySelector.dart'; // <-- if your file is actually currencySelecetor.dart, revert this line
 import 'Settings/settings.dart';
 import 'wishlist/myWishlist.dart';
+import '../../api/renter_api.dart';
+import '../../api/api_config.dart';
 
-
-import 'package:http_parser/http_parser.dart';
 
 class RenterProfile extends StatefulWidget {
   final String id;
@@ -37,34 +35,32 @@ class _RenterProfileState extends State<RenterProfile> {
     getUserData();
   }
 
-  Future<void> getUserData() async {
-    try {
-      final url = Uri.parse('http://10.0.2.2:8000/user/${widget.id}');
-      final response = await http.get(url);
+Future<void> getUserData() async {
+  try {
+    final data = await RenterApi.getUserById(widget.id);
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          userData = data as Map<String, dynamic>;
-          isLoading = false;
-        });
-      } else {
-        throw Exception('Failed to load user (status ${response.statusCode})');
-      }
-    } catch (e) {
-      debugPrint('Error: $e');
-      setState(() {
-        isLoading = false;
-      });
-    }
+    if (!mounted) return;
+
+    setState(() {
+      userData = data;
+      isLoading = false;
+    });
+  } catch (e) {
+    debugPrint('Error: $e');
+
+    if (!mounted) return;
+
+    setState(() {
+      isLoading = false;
+    });
   }
+}
 
 
 String _fullUrl(String p) {
-   const String _base = 'http://10.0.2.2:8000'; // emulator -> host machine
   if (p.startsWith('http://') || p.startsWith('https://')) return p;
-  if (p.startsWith('/')) return '$_base$p';
-  return '$_base/$p';
+  if (p.startsWith('/')) return '${ApiConfig.baseUrl}$p';
+  return '${ApiConfig.baseUrl}/$p';
 }
 
 String _profileImageUrl(Map<String, dynamic> u) {
@@ -84,48 +80,58 @@ String _profileImageUrl(Map<String, dynamic> u) {
 
 
   Future<void> _pickImage(ImageSource source) async {
-    try {
-      final XFile? pickedFile =
-          await _picker.pickImage(source: source, imageQuality: 85);
-      if (pickedFile != null) {
-        setState(() {
-          _imageFile = File(pickedFile.path);
-        });
+  try {
+    final XFile? pickedFile =
+        await _picker.pickImage(source: source, imageQuality: 85);
 
-        // TODO: Upload the new image to your backend, then refresh user data.
-        // Example (adjust endpoint and field name):
-        // await _uploadProfileImage(_imageFile!);
-        // await getUserData();
-      }
-    } catch (e) {
-      debugPrint('pickImage error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not pick image')),
-      );
+    if (pickedFile != null) {
+      final file = File(pickedFile.path);
+
+      setState(() {
+        _imageFile = file;
+      });
+
+      await _uploadProfileImage(file);
     }
+  } catch (e) {
+    debugPrint('pickImage error: $e');
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not pick image')),
+    );
   }
+}
 
 
 
-Future<void> _uploadProfileImage(File image, String type) async {
-  // type: 'profile' | 'license' | 'id'
-  final uri = Uri.parse('http://10.0.2.2:8000/renters/${widget.id}/image?type=$type');
-  final req = http.MultipartRequest('POST', uri)
-    ..files.add(await http.MultipartFile.fromPath(
-      'file',
-      image.path,
-      contentType: MediaType('image', 'jpeg'),
-    ));
+Future<void> _uploadProfileImage(File image) async {
+  try {
+    await RenterApi.uploadRenterImage(
+      renterId: widget.id,
+      image: image,
+    );
 
-  final resp = await req.send();
-  final body = await resp.stream.bytesToString();
-  if (resp.statusCode == 200 || resp.statusCode == 201) {
-    await getUserData(); // refresh UI with new image path
+    await getUserData();
+
+    if (!mounted) return;
+
+    setState(() {
+      _imageFile = null;
+    });
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Image updated')),
     );
-  } else {
-    throw Exception('Upload failed: ${resp.statusCode} $body');
+  } catch (e) {
+    debugPrint('Upload error: $e');
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Image upload failed: $e')),
+    );
   }
 }
   void _showChangePictureOptions() {

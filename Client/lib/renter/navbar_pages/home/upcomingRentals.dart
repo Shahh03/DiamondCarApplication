@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../myRentals/myRentals.dart'; // Import your full rentals page
+import 'package:project/renter/api/booking_api.dart';
 
 class UpcomingRentals extends StatefulWidget {
   final String renterId;
@@ -22,25 +23,27 @@ class _UpcomingRentalsState extends State<UpcomingRentals> {
     getRenterUpcomingBookings();
   }
 
-  Future<void> getRenterUpcomingBookings() async {
-    try {
-      final url = Uri.parse(
-          'http://10.0.2.2:8000/renter/getUpcomingBookings/${widget.renterId}');
-      final response = await http.get(url);
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          renterBookings = data;
-          isBookingsLoading = false;
-        });
-      } else {
-        throw Exception('Failed to load bookings');
-      }
-    } catch (e) {
-      print('Error fetching bookings: $e');
-      setState(() => isBookingsLoading = false);
-    }
+Future<void> getRenterUpcomingBookings() async {
+  try {
+    final bookings = await BookingApi.getUpcomingBookings(widget.renterId);
+
+    if (!mounted) return;
+
+    setState(() {
+      renterBookings = bookings;
+      isBookingsLoading = false;
+    });
+  } catch (e) {
+    debugPrint('Error fetching bookings: $e');
+
+    if (!mounted) return;
+
+    setState(() {
+      renterBookings = [];
+      isBookingsLoading = false;
+    });
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -60,24 +63,53 @@ class _UpcomingRentalsState extends State<UpcomingRentals> {
 
     // Only show the first upcoming rental
     final rental = renterBookings[0];
-    final carVariant = rental['carVariant'] ?? {};
-    final car = carVariant['car'] ?? {};
-    final brand = car['brand'] ?? '';
-    final model = car['model'] ?? '';
-    final carName = "$brand $model";
+  final carVariant = rental['carVariant'] ?? {};
+  final car = carVariant['car'] ?? {};
 
-    final pickupDate = rental['startDate'].split('T')[0] ?? '-';
-    final returnDate = rental['endDate'].split('T')[0] ?? '-';
+  final brand = car['brand'] ?? '';
+  final model = car['model'] ?? '';
+  final carName = "$brand $model";
 
-    final images = carVariant['images'] as List<dynamic>? ?? [];
-    final imageWidget = images.isNotEmpty
-        ? Image.memory(
-            base64Decode(images[0]['filename'].split(',')[1]),
-            width: 60,
-            height: 60,
-            fit: BoxFit.cover,
-          )
-        : Icon(Icons.directions_car, color: Colors.blueAccent, size: 50);
+  final pickupDate = rental['startDate'] != null
+      ? rental['startDate'].toString().split('T').first
+      : '-';
+
+  final returnDate = rental['endDate'] != null
+      ? rental['endDate'].toString().split('T').first
+      : '-';
+
+  final images = carVariant['images'] as List<dynamic>? ?? [];
+
+  Widget imageWidget;
+
+  if (images.isNotEmpty && images[0]['filename'] != null) {
+    final imageString = images[0]['filename'].toString();
+
+    try {
+      final base64String = imageString.contains(',')
+          ? imageString.split(',').last
+          : imageString;
+
+      imageWidget = Image.memory(
+        base64Decode(base64String),
+        width: 60,
+        height: 60,
+        fit: BoxFit.cover,
+      );
+    } catch (e) {
+      imageWidget = const Icon(
+        Icons.directions_car,
+        color: Colors.blueAccent,
+        size: 50,
+      );
+    }
+  } else {
+    imageWidget = const Icon(
+      Icons.directions_car,
+      color: Colors.blueAccent,
+      size: 50,
+    );
+  }
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0),

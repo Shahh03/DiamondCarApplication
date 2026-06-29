@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:project/renter/navbar_pages/bottom_nav_bar.dart';
 import 'package:intl/intl.dart';
+
+import '../../api/renter_api.dart';
+import '../../api/car_variant_api.dart';
 import 'carVariantDetails.dart';
 
 class RenterSearch extends StatefulWidget {
@@ -55,25 +56,28 @@ class _RenterSearchState extends State<RenterSearch> {
     getAllAvailableCarVariants();
   }
 
-  Future<void> getUserData() async {
-    try {
-      final url = Uri.parse('http://10.0.2.2:8000/user/${widget.id}');
-      final response = await http.get(url);
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          userData = data;
-          isUserLoading = false;
-        });
-        print("User Data: $userData");
-      } else {
-        throw Exception('Failed to load user');
-      }
-    } catch (e) {
-      print('Error fetching user: $e');
-      setState(() => isUserLoading = false);
-    }
+Future<void> getUserData() async {
+  try {
+    final data = await RenterApi.getUserById(widget.id);
+
+    if (!mounted) return;
+
+    setState(() {
+      userData = data;
+      isUserLoading = false;
+    });
+
+    debugPrint("User Data: $userData");
+  } catch (e) {
+    debugPrint('Error fetching user: $e');
+
+    if (!mounted) return;
+
+    setState(() {
+      isUserLoading = false;
+    });
   }
+}
 
   // ===== Currency helpers =====
 
@@ -151,36 +155,30 @@ class _RenterSearchState extends State<RenterSearch> {
     return (target == 'EGP') ? '$sym $s' : '$sym $s';
   }
 
-  Future<void> getAllAvailableCarVariants() async {
-    try {
-      final url = Uri.parse('http://10.0.2.2:8000/carVariant/getAllAvailable'); // change casing if needed
-      final response = await http.get(url);
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = jsonDecode(response.body);
+Future<void> getAllAvailableCarVariants() async {
+  try {
+    final list = await CarVariantApi.getAllAvailableCarVariants();
 
-        List<dynamic> list;
-        if (data is List) {
-          list = data;
-        } else if (data is Map && data['data'] is List) {
-          list = data['data'];
-        } else {
-          list = [];
-        }
+    if (!mounted) return;
 
-        setState(() {
-          carVariants = list;
-          isCarsLoading = false;
-        });
-        _deriveFilterOptions();
-        print("Variants: ${carVariants.length}");
-      } else {
-        throw Exception('Failed to load variants');
-      }
-    } catch (e) {
-      print('Error fetching variants: $e');
-      setState(() => isCarsLoading = false);
-    }
+    setState(() {
+      carVariants = list;
+      isCarsLoading = false;
+    });
+
+    _deriveFilterOptions();
+
+    debugPrint("Variants: ${carVariants.length}");
+  } catch (e) {
+    debugPrint('Error fetching variants: $e');
+
+    if (!mounted) return;
+
+    setState(() {
+      isCarsLoading = false;
+    });
   }
+}
 
   // ====== Derive options & bounds from data ======
   void _deriveFilterOptions() {

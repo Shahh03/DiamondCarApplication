@@ -1,7 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import '../../api/renter_api.dart';
+import '../../api/car_variant_api.dart';
 
 class CarVariantDetails extends StatefulWidget {
   final String variantId;
@@ -23,7 +23,6 @@ class _CarVariantDetailsState extends State<CarVariantDetails> {
   bool isVariantLoading = true;
   bool isUserLoading = true;
   String? _variantError;
-  String? _userError;
   int _imgIndex = 0;
 
   bool _isWishlisted = false;
@@ -41,65 +40,61 @@ class _CarVariantDetailsState extends State<CarVariantDetails> {
 
   // ---------------- User & Currency helpers ----------------
 
-  Future<void> getUserData() async {
-    try {
-      final url = Uri.parse('http://10.0.2.2:8000/user/${widget.userId}');
-      final response = await http.get(url);
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          userData = data;
-          isUserLoading = false;
-        });
-        //debugPrint("User Data: $userData");
-      } else {
-        throw Exception('Failed to load user');
-      }
-    } catch (e) {
-      debugPrint('Error fetching user: $e');
-      setState(() => isUserLoading = false);
-      _userError = 'Failed to load user';
-    }
-  }
-
- Future<void> getUserWishlist() async {
+Future<void> getUserData() async {
   try {
-    final uri = Uri.parse('http://10.0.2.2:8000/renter/getWishlist/${widget.userId}');
-    final res = await http.get(uri);
-    if (res.statusCode == 200) {
-      final ids = extractVariantIdsFromWishlistResponse(res.body); // works with raw JSON
-      if (!mounted) return;
-      setState(() => _isWishlisted = ids.contains(widget.variantId));
-      // If you also need the array for anything else:
-      // final List<String> idList = ids.toList(growable: false);
-    } else {
-      debugPrint('Wishlist load failed: ${res.statusCode} ${res.body}');
-    }
+    final data = await RenterApi.getUserById(widget.userId);
+
+    if (!mounted) return;
+
+    setState(() {
+      userData = data;
+      isUserLoading = false;
+    });
+  } catch (e) {
+    debugPrint('Error fetching user: $e');
+
+    if (!mounted) return;
+
+    setState(() {
+      isUserLoading = false;
+    });
+  }
+}
+
+Future<void> getUserWishlist() async {
+  try {
+    final ids = await RenterApi.getWishlistVariantIds(widget.userId);
+
+    if (!mounted) return;
+
+    setState(() {
+      _isWishlisted = ids.contains(widget.variantId);
+    });
   } catch (e) {
     debugPrint('Wishlist load error: $e');
   }
 }
 
+Future<void> getVariantData() async {
+  try {
+    final data = await CarVariantApi.getCarVariantById(widget.variantId);
 
-  // Normalize common shapes to Set<String> of variant ids
-Set<String> extractVariantIdsFromWishlistResponse(dynamic raw) {
-  final data = (raw is String) ? jsonDecode(raw) : raw;
+    if (!mounted) return;
 
-  // Normalize to a List
-  final list = data is List
-      ? data
-      : (data is Map && data['wishlist'] is List)
-          ? data['wishlist']
-          : (data is Map && data['data'] is List)
-              ? data['data']
-              : const [];
+    setState(() {
+      carVariantData = data;
+      isVariantLoading = false;
+    });
+  } catch (e) {
+    debugPrint('Error fetching Car Variant: $e');
 
-  // Each item is a carVariant; its ID is the top-level "_id"
-  return list
-      .whereType<Map>()
-      .map((m) => m['_id']?.toString())
-      .whereType<String>()
-      .toSet();
+    if (!mounted) return;
+
+    setState(() {
+      isVariantLoading = false;
+      _variantError = 'Failed to load car variant';
+    });
+  }
 }
 
   Future<void> _toggleWishlist() async {
@@ -133,25 +128,15 @@ Set<String> extractVariantIdsFromWishlistResponse(dynamic raw) {
     }
   }
 
-  Future<bool> _addToWishlist() async {
-    final uri = Uri.parse(
-      'http://10.0.2.2:8000/renter/addToWishlist/${widget.userId}/${widget.variantId}',
-    );
-    final res = await http.post(uri); // POST
-    final ok = (res.statusCode >= 200 && res.statusCode < 300) || res.statusCode == 409; // already added
-    if (!ok) debugPrint('ADD wishlist failed: ${res.statusCode} ${res.body}');
-    return ok;
-  }
+ Future<bool> _addToWishlist() {
+  return RenterApi.addToWishlist(widget.userId, widget.variantId);
+}
 
-  Future<bool> _removeFromWishlist() async {
-    final uri = Uri.parse(
-      'http://10.0.2.2:8000/renter/removeFromWishlist/${widget.userId}/${widget.variantId}',
-    );
-    final res = await http.post(uri); // POST
-    final ok = (res.statusCode >= 200 && res.statusCode < 300) || res.statusCode == 404; // already removed
-    if (!ok) debugPrint('REMOVE wishlist failed: ${res.statusCode} ${res.body}');
-    return ok;
-  }
+Future<bool> _removeFromWishlist() {
+  return RenterApi.removeFromWishlist(widget.userId, widget.variantId);
+}
+
+
 
   String get _preferredCurrency {
     final c =
@@ -217,28 +202,6 @@ Set<String> extractVariantIdsFromWishlistResponse(dynamic raw) {
     return '$sym $s';
   }
 
-  // ---------------- Variant fetch ----------------
-
-  Future<void> getVariantData() async {
-    try {
-      final url = Uri.parse('http://10.0.2.2:8000/carVariant/${widget.variantId}');
-      final response = await http.get(url);
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          carVariantData = data;
-          isVariantLoading = false;
-        });
-        //debugPrint("Car Variant Data: $carVariantData"); // fixed: was printing userData
-      } else {
-        throw Exception('Failed to load Car Variant');
-      }
-    } catch (e) {
-      debugPrint('Error fetching Car Variant: $e');
-      setState(() => isVariantLoading = false);
-      _variantError = 'Failed to load car variant';
-    }
-  }
 
   // ---------------- UI helpers ----------------
 

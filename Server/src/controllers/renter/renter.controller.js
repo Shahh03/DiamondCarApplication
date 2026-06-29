@@ -1,6 +1,7 @@
 import Renter from "../../models/renter.js";
 import Booking from "../../models/booking.js";
 import CarVariant from "../../models/carVariant.js";
+import User from "../../models/user.js";
 import mongoose from 'mongoose';
 
 
@@ -127,48 +128,90 @@ export const updateRenterCurrency = async (req, res) => {
 
 export const changeRenterUsername = async (req, res) => {
   try {
-    const { renterId } = req.params;
-    let { username } = req.body;
+    const renterId = req.params.renterId;
+    const { username, password } = req.body;
 
-    if (!username) {
-      return res.status(400).json({ message: 'Username is required' });
+    if (!username || !password) {
+      return res.status(400).json({
+        message: "Username and password are required",
+      });
     }
 
+    const newUsername = username.trim();
 
-         username = username.toLowerCase();
-
-
-    // Validate: at least 4 different letters
-    const letters = username.match(/[a-zA-Z]/g) || [];
-    const uniqueLetters = new Set(letters.map(l => l.toLowerCase()));
-    if (uniqueLetters.size < 4) {
-      return res.status(400).json({ message: 'Username must contain at least 4 different letters' });
+    if (newUsername.length < 4) {
+      return res.status(400).json({
+        message: "Username must be at least 4 characters",
+      });
     }
 
-    // Check if renter exists
     const renter = await Renter.findById(renterId);
+
     if (!renter) {
-      return res.status(404).json({ message: 'Renter not found' });
+      return res.status(404).json({
+        message: "Renter not found",
+      });
     }
 
-    if (renter.username.toLowerCase() === username) {
-      return res.status(400).json({ message: `${username} is already your username` });
-    }
-    const usernameTaken = await Renter.findOne({ username });
-    if (usernameTaken) {
-      return res.status(400).json({ message: 'Username already exists' });
+    if (renter.type !== "Renter") {
+      return res.status(403).json({
+        message: "Only renters can change their username",
+      });
     }
 
-    renter.username = username;
+    // For now, because your password code is still plain text:
+    if (password !== renter.password) {
+      return res.status(400).json({
+        message: "Incorrect password",
+      });
+    }
+
+    if (newUsername === renter.username) {
+      return res.status(400).json({
+        message: "New username cannot be the same as current username",
+      });
+    }
+
+    const existingUser = await User.findOne({ username: newUsername });
+
+    if (existingUser && existingUser._id.toString() !== renterId) {
+      return res.status(409).json({
+        message: "Username already taken",
+      });
+    }
+
+    const cooldownDays = 30;
+
+    if (renter.usernameLastChangedAt) {
+      const daysSinceLastChange =
+        (Date.now() - renter.usernameLastChangedAt.getTime()) /
+        (1000 * 60 * 60 * 24);
+
+      if (daysSinceLastChange < cooldownDays) {
+        const daysLeft = Math.ceil(cooldownDays - daysSinceLastChange);
+
+        return res.status(400).json({
+          message: `You can change your username again in ${daysLeft} day(s)`,
+        });
+      }
+    }
+
+    renter.username = newUsername;
+    renter.usernameLastChangedAt = new Date();
+    renter.usernameChangeCount = (renter.usernameChangeCount || 0) + 1;
+
     await renter.save();
 
-    res.status(200).json(renter);
+    return res.status(200).json({
+      message: "Username updated successfully",
+    });
   } catch (error) {
-    console.error('Update error:', error);
-    res.status(500).json({ message: error.message });
+    console.error("Change username error:", error);
+    return res.status(500).json({
+      message: error.message,
+    });
   }
 };
-
 
 export const changeRenterPassword = async (req, res) => {
   try {

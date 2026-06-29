@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:project/renter/navbar_pages/bottom_nav_bar.dart';
-import '../../bookingDetails.dart';
 
+import '../../bookingDetails.dart';
+import '../../api/renter_api.dart';
+import '../../api/booking_api.dart';
 class RenterMyRentals extends StatefulWidget {
   final String id;
 
@@ -31,45 +31,52 @@ class _RenterMyRentalsState extends State<RenterMyRentals> {
 
   }
 
-  Future<void> getUserData() async {
-    try {
-      final url = Uri.parse('http://10.0.2.2:8000/user/${widget.id}');
-      final response = await http.get(url);
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          userData = data;
-          isUserLoading = false;
-        });
-        print("User Data: $userData");
-      } else {
-        throw Exception('Failed to load user');
-      }
-    } catch (e) {
-      print('Error fetching user: $e');
-      setState(() => isUserLoading = false);
-    }
-  }
 
-  Future<void> getRenterBookings() async {
-    try {
-      final url = Uri.parse('http://10.0.2.2:8000/renter/getBookings/${widget.id}');
-      final response = await http.get(url);
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          renterBookings = data;
-          isBookingsLoading = false;
-        });
-        print("Bookings: $renterBookings");
-      } else {
-        throw Exception('Failed to load bookings');
-      }
-    } catch (e) {
-      print('Error fetching bookings: $e');
-      setState(() => isBookingsLoading = false);
-    }
+  Future<void> getUserData() async {
+  try {
+    final data = await RenterApi.getUserById(widget.id);
+
+    if (!mounted) return;
+
+    setState(() {
+      userData = data;
+      isUserLoading = false;
+    });
+
+    debugPrint("User Data: $userData");
+  } catch (e) {
+    debugPrint('Error fetching user: $e');
+
+    if (!mounted) return;
+
+    setState(() {
+      isUserLoading = false;
+    });
   }
+}
+
+ Future<void> getRenterBookings() async {
+  try {
+    final bookings = await BookingApi.getRenterBookings(widget.id);
+
+    if (!mounted) return;
+
+    setState(() {
+      renterBookings = bookings;
+      isBookingsLoading = false;
+    });
+
+    debugPrint("Bookings: $renterBookings");
+  } catch (e) {
+    debugPrint('Error fetching bookings: $e');
+
+    if (!mounted) return;
+
+    setState(() {
+      isBookingsLoading = false;
+    });
+  }
+}
 
   String formatDate(String isoDate) {
   final date = DateTime.parse(isoDate);

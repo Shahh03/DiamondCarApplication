@@ -1,28 +1,46 @@
 import mongoose from "mongoose";
-const Schema = mongoose.Schema;
 
 const userSchema = new mongoose.Schema({
   username: {
     type: String,
     required: true,
     unique: true,
-  }, 
+    trim: true,
+  },
+
   email: {
     type: String,
+    required: true,
+    unique: true,
+    trim: true,
+    lowercase: true,
   },
+
   password: {
     type: String,
     required: true,
-  }, // Password of the user
+  },
+
   type: {
     type: String,
-    enum: ["Renter","Provider","Admin"], // Possible user roles
+    enum: ["Renter", "Provider", "Admin"],
     required: true,
   },
+
   hasAcceptedTerms: {
     type: Boolean,
-    default: false,  // Default to false, indicating they haven't accepted yet
-  }
+    default: false,
+  },
+
+  usernameLastChangedAt: {
+    type: Date,
+    default: null,
+  },
+
+  usernameChangeCount: {
+    type: Number,
+    default: 0,
+  },
 });
 
 const User = mongoose.model("User", userSchema);

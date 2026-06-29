@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import '../../api/renter_api.dart';
 
 class CurrencySelectorPage extends StatefulWidget {
   final String id;
@@ -35,50 +34,50 @@ class _CurrencySelectorPageState extends State<CurrencySelectorPage> {
     getUserData();
   }
 
-  Future<void> getUserData() async {
-    try {
-      final url = Uri.parse('http://10.0.2.2:8000/user/${widget.id}');
-      final response = await http.get(url);
+ Future<void> getUserData() async {
+  try {
+    final data = await RenterApi.getUserById(widget.id);
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          selectedCurrencyCode = data['currency'];
-          isLoading = false;
-        });
-      } else {
-        throw Exception('Failed to load user data');
-      }
-    } catch (e) {
-      print('Error: $e');
-      setState(() => isLoading = false);
-    }
+    if (!mounted) return;
+
+    setState(() {
+      selectedCurrencyCode = data['currency'];
+      isLoading = false;
+    });
+  } catch (e) {
+    debugPrint('Error: $e');
+
+    if (!mounted) return;
+
+    setState(() {
+      isLoading = false;
+    });
   }
+}
 
-  Future<void> saveCurrency() async {
-    try {
-      final url = Uri.parse('http://10.0.2.2:8000/renter/updateCurrency/${widget.id}');
-      final response = await http.put(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'currency': selectedCurrencyCode}),
-      );
+ Future<void> saveCurrency() async {
+  if (selectedCurrencyCode == null) return;
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Currency updated successfully')),
-        );
-        Navigator.pop(context);
-      } else {
-        throw Exception('Failed to update currency');
-      }
-    } catch (e) {
-      print('Error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error updating currency')),
-      );
-    }
+  try {
+    await RenterApi.updateCurrency(widget.id, selectedCurrencyCode!);
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Currency updated successfully')),
+    );
+
+    Navigator.pop(context);
+  } catch (e) {
+    debugPrint('Error: $e');
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Error updating currency')),
+    );
   }
+}
 
   @override
   Widget build(BuildContext context) {

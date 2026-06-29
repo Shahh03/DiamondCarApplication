@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import '../../api/renter_api.dart';
 import 'account.dart';
 
 class EditProfilePage extends StatefulWidget {
@@ -52,80 +51,80 @@ class _EditProfileState extends State<EditProfilePage> {
     super.dispose();
   }
 
-  Future<void> getUserData() async {
-    try {
-      final url = Uri.parse('http://10.0.2.2:8000/user/${widget.id}');
-      final response = await http.get(url);
+ Future<void> getUserData() async {
+  try {
+    final data = await RenterApi.getUserById(widget.id);
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          userData = data;
-          final fullName = (data['name'] ?? '').trim();
-          final nameParts = fullName.split(' ');
+    if (!mounted) return;
 
-          firstNameController.text = nameParts.isNotEmpty ? nameParts.first : '';
-          lastNameController.text = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
-          nationalityController.text = data['nationality'] ?? '';
-          occupationController.text = data['occupation'] ?? '';
-          locationController.text = data['location'] ?? '';
-          gender = data['gender'];
-          birthDate = DateTime.tryParse(data['birthDate'] ?? '');
-          isLoading = false;
-        });
-      } else {
-        throw Exception('Failed to load user');
-      }
-    } catch (e) {
-      print('Error: $e');
-      setState(() {
-        isLoading = false;
-      });
-    }
+    setState(() {
+      userData = data;
+
+      final fullName = (data['name'] ?? '').toString().trim();
+      final nameParts = fullName.split(' ');
+
+      firstNameController.text = nameParts.isNotEmpty ? nameParts.first : '';
+      lastNameController.text =
+          nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+
+      nationalityController.text = data['nationality'] ?? '';
+      occupationController.text = data['occupation'] ?? '';
+      locationController.text = data['location'] ?? '';
+      gender = data['gender'];
+      birthDate = DateTime.tryParse(data['birthDate'] ?? '');
+
+      isLoading = false;
+    });
+  } catch (e) {
+    debugPrint('Error: $e');
+
+    if (!mounted) return;
+
+    setState(() {
+      isLoading = false;
+    });
   }
+}
 
   Future<void> saveChanges() async {
-    if (!_formKey.currentState!.validate()) return;
+  if (!_formKey.currentState!.validate()) return;
 
-    final firstName = firstNameController.text.trim();
-    final lastName = lastNameController.text.trim();
+  final firstName = firstNameController.text.trim();
+  final lastName = lastNameController.text.trim();
 
-    try {
-      final url = Uri.parse('http://10.0.2.2:8000/renter/update/${widget.id}');
-      final response = await http.put(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'name': '$firstName $lastName',
-          'nationality': nationalityController.text.trim(),
-          'occupation': occupationController.text.trim(),
-          'location': locationController.text.trim(),
-          'gender': gender,
-          'birthDate': birthDate?.toIso8601String(),
-        }),
-      );
+  try {
+    await RenterApi.updateRenterProfile(
+      renterId: widget.id,
+      name: '$firstName $lastName',
+      nationality: nationalityController.text.trim(),
+      occupation: occupationController.text.trim(),
+      location: locationController.text.trim(),
+      gender: gender,
+      birthDate: birthDate,
+    );
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile updated successfully')),
-        );
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => RenterProfile(id: widget.id)),
-        );
-      } else {
-        final error = jsonDecode(response.body);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error['message'] ?? 'Failed to update profile')),
-        );
-      }
-    } catch (e) {
-      print('Error updating profile: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('An error occurred')),
-      );
-    }
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Profile updated successfully')),
+    );
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RenterProfile(id: widget.id),
+      ),
+    );
+  } catch (e) {
+    debugPrint('Error updating profile: $e');
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+    );
   }
+}
 
   Widget _buildTextField(TextEditingController controller, String label, IconData icon) {
     return Padding(
