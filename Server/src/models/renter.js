@@ -58,16 +58,23 @@ const renterSchema = new mongoose.Schema({
   ],
 
   profilePicture: {
-    filename: String,
-    filepath: String, // This will store the path or URL to the profile picture
+    type: String,
+    default: "",
   },
+
+  profilePicturePublicId: {
+    type: String,
+    default: ''
+  },
+
   driverLicensePicture: {
-    filename: String,
-    filepath: String, // This will store the path or URL to the profile picture
+    type: String,
+    default: "",
   },
+
   idPicture: {
-    filename: String,
-    filepath: String, // This will store the path or URL to the profile picture
+    type: String,
+    default: "",
   },
   currency: {
     type: String,

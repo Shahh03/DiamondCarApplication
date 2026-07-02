@@ -63,9 +63,10 @@ const providerSchema = new mongoose.Schema({
     swiftCode: { type: String },
   },
   profilePicture: {
-    filename: String,
-    filepath: String, // Stores the profile image of the provider
+    type: String,
+    default: "",
   },
+
 });
 
 // Use User discriminator for Provider schema

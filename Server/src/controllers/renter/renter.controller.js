@@ -4,10 +4,12 @@ import CarVariant from "../../models/carVariant.js";
 import User from "../../models/user.js";
 import mongoose from 'mongoose';
 
-
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+
+import { uploadBufferToCloudinary } from "../../utils/uploadToCloudinary.js";
+import { v2 as cloudinary } from 'cloudinary';
 
 
 
@@ -297,62 +299,67 @@ export const removeFromWishlist = async (req, res) => {
 
 
 
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname  = path.dirname(__filename);
-
 export const changeRenterProfilePicture = async (req, res) => {
   try {
     const { renterId } = req.params;
 
-    // validate ObjectId to avoid CastError
-    if (!mongoose.Types.ObjectId.isValid(renterId)) {
-      if (req.file?.path) fs.unlink(req.file.path, () => {});
-      return res.status(400).json({ error: 'Invalid renterId' });
+    console.log('REQ FILE:', req.file);
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'No image uploaded' });
     }
 
-    // multer.single('file') must have populated req.file
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded (use form-data key "file")' });
+    if (!req.file.buffer) {
+      return res.status(400).json({ message: 'Uploaded file has no buffer' });
     }
 
     const renter = await Renter.findById(renterId);
+
     if (!renter) {
-      fs.unlink(req.file.path, () => {});
-      return res.status(404).json({ error: 'Renter not found' });
+      return res.status(404).json({ message: 'Renter not found' });
     }
 
-    // build a public relative path that starts with /uploads/...
-    const normalized = (req.file.path || '').replace(/\\/g, '/');
-    const i = normalized.lastIndexOf('/uploads/');
-    const relPath = i !== -1
-      ? normalized.substring(i)
-      : `/uploads/renters/profile/${req.file.filename}`;
+    const oldPublicId = renter.profilePicturePublicId;
 
-    // delete old local file if we own it
-    const oldRel = renter.profilePicture?.filepath;
-    if (oldRel && oldRel.startsWith('/uploads/')) {
-      const oldAbs = path.join(__dirname, '..', '..', oldRel);
-      fs.unlink(oldAbs, () => {});
-    }
+    // 1. Upload new image from buffer to Cloudinary
+    const uploadResult = await uploadBufferToCloudinary(req.file.buffer);
 
-    renter.profilePicture = {
-      filename: req.file.filename,  // stored filename on disk
-      filepath: relPath,            // relative public URL
-    };
+    console.log('New Cloudinary public_id:', uploadResult.public_id);
+    console.log('Old Cloudinary public_id:', oldPublicId);
+
+    // 2. Save new Cloudinary URL and public_id
+    renter.profilePicture = uploadResult.secure_url;
+    renter.profilePicturePublicId = uploadResult.public_id;
+
     await renter.save();
 
-    return res.json({
-      message: 'Profile picture updated',
-      renter: {
-        _id: renter._id,
-        name: renter.name,
-        profilePicture: renter.profilePicture,
-      },
+    // 3. Delete old Cloudinary image after DB update succeeds
+    if (oldPublicId) {
+      try {
+        const deleteResult = await cloudinary.uploader.destroy(oldPublicId, {
+          resource_type: 'image',
+          invalidate: true,
+        });
+
+        console.log('Old image delete result:', deleteResult);
+      } catch (deleteError) {
+        console.error('Old profile picture delete failed:', deleteError);
+      }
+    }
+
+    return res.status(200).json({
+      message: 'Profile picture updated successfully',
+      profilePicture: renter.profilePicture,
+      profilePicturePublicId: renter.profilePicturePublicId,
     });
-  } catch (e) {
-    console.error('changeRenterProfilePicture error:', e);
-    return res.status(500).json({ error: 'Failed to change profile picture' });
+
+  } catch (error) {
+    console.error('Change profile picture error:', error);
+
+    return res.status(500).json({
+      message: 'Failed to update profile picture',
+      error: error.message,
+    });
   }
 };
 

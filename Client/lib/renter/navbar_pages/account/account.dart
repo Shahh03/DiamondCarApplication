@@ -10,7 +10,6 @@ import 'currencySelector.dart'; // <-- if your file is actually currencySeleceto
 import 'Settings/settings.dart';
 import 'wishlist/myWishlist.dart';
 import '../../api/renter_api.dart';
-import '../../api/api_config.dart';
 
 
 class RenterProfile extends StatefulWidget {
@@ -57,27 +56,15 @@ Future<void> getUserData() async {
 }
 
 
-String _fullUrl(String p) {
-  if (p.startsWith('http://') || p.startsWith('https://')) return p;
-  if (p.startsWith('/')) return '${ApiConfig.baseUrl}$p';
-  return '${ApiConfig.baseUrl}/$p';
-}
-
 String _profileImageUrl(Map<String, dynamic> u) {
-  // correct key: profilePicture (lowercase p)
   final pic = u['profilePicture'];
-  if (pic is Map<String, dynamic>) {
-    final fp = pic['filepath'];
-    if (fp is String && fp.isNotEmpty) return _fullUrl(fp);
-  }
 
-  // optional direct absolute string your API might return someday
-  final direct = u['profileImage'];
-  if (direct is String && direct.isNotEmpty) return _fullUrl(direct);
+  if (pic is String && pic.isNotEmpty) {
+    return pic;
+  }
 
   return 'https://via.placeholder.com/150';
 }
-
 
   Future<void> _pickImage(ImageSource source) async {
   try {
@@ -202,10 +189,30 @@ Future<void> _uploadProfileImage(File image) async {
     final theme = Theme.of(context);
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF6F7FB),
       appBar: AppBar(
-        title: const Text('My Account'),
-        backgroundColor: Colors.blueAccent,
         automaticallyImplyLeading: false,
+        elevation: 0,
+        titleSpacing: 16,
+        title: const Text(
+          'My Account',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: Colors.black,
+          ),
+        ),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color(0xFF2563EB),
+                Color(0xFF60A5FA),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())

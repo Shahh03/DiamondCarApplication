@@ -46,11 +46,16 @@ const carVariantSchema = new mongoose.Schema({
     },
   ],
   images: [
-      {
-        filename: String,
-        filepath: String, // Paths to images of the car
-      },
-    ],
+    {
+      type: String,
+    },
+  ],
+
+imagePublicIds: [       // Cloudinary public_ids for deletion
+    {
+      type: String,
+    },
+  ],      
 });
 
 const CarVariant = mongoose.model("CarVariant", carVariantSchema);

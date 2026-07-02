@@ -20,8 +20,10 @@ class CarVariantDetails extends StatefulWidget {
 class _CarVariantDetailsState extends State<CarVariantDetails> {
   Map<String, dynamic>? carVariantData;
   Map<String, dynamic>? userData;
+
   bool isVariantLoading = true;
   bool isUserLoading = true;
+
   String? _variantError;
   int _imgIndex = 0;
 
@@ -35,70 +37,73 @@ class _CarVariantDetailsState extends State<CarVariantDetails> {
     super.initState();
     getUserData();
     getVariantData();
-    getUserWishlist(); // load saved items → ensures heart is filled if already wishlisted
+    getUserWishlist();
   }
 
-  // ---------------- User & Currency helpers ----------------
+  // ---------------- User / Data ----------------
 
-Future<void> getUserData() async {
-  try {
-    final data = await RenterApi.getUserById(widget.userId);
+  Future<void> getUserData() async {
+    try {
+      final data = await RenterApi.getUserById(widget.userId);
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      userData = data;
-      isUserLoading = false;
-    });
-  } catch (e) {
-    debugPrint('Error fetching user: $e');
+      setState(() {
+        userData = data;
+        isUserLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error fetching user: $e');
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      isUserLoading = false;
-    });
+      setState(() {
+        isUserLoading = false;
+      });
+    }
   }
-}
 
-Future<void> getUserWishlist() async {
-  try {
-    final ids = await RenterApi.getWishlistVariantIds(widget.userId);
+  Future<void> getUserWishlist() async {
+    try {
+      final ids = await RenterApi.getWishlistVariantIds(widget.userId);
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _isWishlisted = ids.contains(widget.variantId);
-    });
-  } catch (e) {
-    debugPrint('Wishlist load error: $e');
+      setState(() {
+        _isWishlisted = ids.contains(widget.variantId);
+      });
+    } catch (e) {
+      debugPrint('Wishlist load error: $e');
+    }
   }
-}
 
-Future<void> getVariantData() async {
-  try {
-    final data = await CarVariantApi.getCarVariantById(widget.variantId);
+  Future<void> getVariantData() async {
+    try {
+      final data = await CarVariantApi.getCarVariantById(widget.variantId);
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      carVariantData = data;
-      isVariantLoading = false;
-    });
-  } catch (e) {
-    debugPrint('Error fetching Car Variant: $e');
+      setState(() {
+        carVariantData = data;
+        isVariantLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error fetching Car Variant: $e');
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      isVariantLoading = false;
-      _variantError = 'Failed to load car variant';
-    });
+      setState(() {
+        isVariantLoading = false;
+        _variantError = 'Failed to load car variant';
+      });
+    }
   }
-}
+
+  // ---------------- Wishlist ----------------
 
   Future<void> _toggleWishlist() async {
     if (_wishBusy) return;
+
     setState(() => _wishBusy = true);
 
     try {
@@ -106,37 +111,42 @@ Future<void> getVariantData() async {
       final ok = wantRemove ? await _removeFromWishlist() : await _addToWishlist();
 
       if (!mounted) return;
+
       if (ok) {
         setState(() => _isWishlisted = !_isWishlisted);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              wantRemove ? 'Failed to remove from wishlist' : 'Failed to add to wishlist',
+              wantRemove
+                  ? 'Failed to remove from wishlist'
+                  : 'Failed to add to wishlist',
             ),
           ),
         );
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Wishlist error: $e')),
-        );
-      }
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Wishlist error: $e')),
+      );
     } finally {
-      if (mounted) setState(() => _wishBusy = false);
+      if (mounted) {
+        setState(() => _wishBusy = false);
+      }
     }
   }
 
- Future<bool> _addToWishlist() {
-  return RenterApi.addToWishlist(widget.userId, widget.variantId);
-}
+  Future<bool> _addToWishlist() {
+    return RenterApi.addToWishlist(widget.userId, widget.variantId);
+  }
 
-Future<bool> _removeFromWishlist() {
-  return RenterApi.removeFromWishlist(widget.userId, widget.variantId);
-}
+  Future<bool> _removeFromWishlist() {
+    return RenterApi.removeFromWishlist(widget.userId, widget.variantId);
+  }
 
-
+  // ---------------- Currency helpers ----------------
 
   String get _preferredCurrency {
     final c =
@@ -144,25 +154,32 @@ Future<bool> _removeFromWishlist() {
         userData?['preferredCurrency'] ??
         userData?['settings']?['currency'] ??
         'EGP';
+
     return c.toString().toUpperCase();
   }
 
   Map<String, double> get _egpPerUnit {
     final m = <String, double>{'EGP': 1};
+
     final fx = userData?['fxRates'];
+
     if (fx is Map) {
       for (final e in fx.entries) {
         final k = e.key.toString().toUpperCase();
         final v = (e.value is num) ? (e.value as num).toDouble() : null;
-        if (v != null && v > 0) m[k] = v;
+
+        if (v != null && v > 0) {
+          m[k] = v;
+        }
       }
     }
-    // sensible fallbacks
+
     m.putIfAbsent('USD', () => 50.0);
     m.putIfAbsent('EUR', () => 54.0);
     m.putIfAbsent('GBP', () => 64.0);
     m.putIfAbsent('SAR', () => 13.3);
     m.putIfAbsent('AED', () => 13.6);
+
     return m;
   }
 
@@ -184,29 +201,28 @@ Future<bool> _removeFromWishlist() {
     }
   }
 
-  // Convert amount stored in **AED** → preferred currency.
-  // fx map is "EGP per 1 unit". Cross-rate:
-  // value_in_target = amount_in_AED * (EGP_per_AED / EGP_per_target)
   String _formatMoneyFromAED(num aedAmount, {String? to}) {
     final code = (to ?? _preferredCurrency).toUpperCase();
 
-    final egpPer = _egpPerUnit;                // EGP per 1 unit
-    final egpPerAED = egpPer['AED'] ?? 13.6;   // fallback if backend didn't send
+    final egpPer = _egpPerUnit;
+    final egpPerAED = egpPer['AED'] ?? 13.6;
     final egpPerTarget = egpPer[code] ?? 1.0;
 
-    final double value =
-        (code == 'AED') ? aedAmount.toDouble() : aedAmount.toDouble() * (egpPerAED / egpPerTarget);
+    final double value = code == 'AED'
+        ? aedAmount.toDouble()
+        : aedAmount.toDouble() * (egpPerAED / egpPerTarget);
 
     final sym = _currencySymbol(code);
     final s = NumberFormat.decimalPattern().format(value.round());
+
     return '$sym $s';
   }
-
 
   // ---------------- UI helpers ----------------
 
   Color _colorFromName(String name) {
     final n = name.toLowerCase();
+
     if (n.contains('black')) return Colors.black;
     if (n.contains('white')) return Colors.white;
     if (n.contains('red')) return Colors.red;
@@ -215,43 +231,61 @@ Future<bool> _removeFromWishlist() {
     if (n.contains('yellow')) return Colors.yellow;
     if (n.contains('orange')) return Colors.orange;
     if (n.contains('purple')) return Colors.purple;
-    if (n.contains('silver') || n.contains('grey') || n.contains('gray')) return Colors.grey;
+
+    if (n.contains('silver') || n.contains('grey') || n.contains('gray')) {
+      return Colors.grey;
+    }
+
     if (n.contains('gold')) return const Color(0xFFFFD700);
     if (n.contains('beige')) return const Color(0xFFF5F5DC);
     if (n.contains('brown')) return Colors.brown;
+
     return Colors.grey.shade600;
   }
 
   IconData _fuelIcon(String fuel) {
     final f = fuel.toLowerCase();
+
     if (f.contains('electric')) return Icons.electric_bolt;
     if (f.contains('hybrid')) return Icons.energy_savings_leaf;
+
     return Icons.local_gas_station_outlined;
   }
 
   IconData _transmissionIcon(String tr) {
     final t = tr.toLowerCase();
+
     if (t.contains('auto')) return Icons.settings_suggest;
+
     return Icons.settings_outlined;
   }
 
   String _seatLabel(dynamic value) {
     final s = (value ?? '').toString();
     final n = int.tryParse(s);
+
     if (n == null) return s.isEmpty ? '' : '$s seats';
+
     return n == 1 ? '1 seat' : '$n seats';
   }
+
+  // ---------------- Build ----------------
 
   @override
   Widget build(BuildContext context) {
     final body = _isLoading
         ? const Center(child: CircularProgressIndicator())
         : (_variantError != null)
-            ? _ErrorView(message: _variantError!, onRetry: getVariantData)
+            ? _ErrorView(
+                message: _variantError!,
+                onRetry: getVariantData,
+              )
             : _DetailsView(
                 variant: carVariantData!,
                 imgIndex: _imgIndex,
-                onImgChanged: (i) => setState(() => _imgIndex = i), // ← updates dots
+                onImgChanged: (i) {
+                  setState(() => _imgIndex = i);
+                },
                 money: _formatMoneyFromAED,
                 colorFromName: _colorFromName,
                 fuelIcon: _fuelIcon,
@@ -310,16 +344,86 @@ class _DetailsView extends StatelessWidget {
     required this.onToggleWishlist,
   });
 
+  String getCarImageUrl(dynamic image) {
+    // New structure:
+    // images: ["https://res.cloudinary.com/..."]
+    if (image is String) {
+      return image;
+    }
+
+    // Old structure fallback:
+    // images: [{ filepath: "..." }]
+    if (image is Map && image['filepath'] != null) {
+      return image['filepath'].toString();
+    }
+
+    // Extra fallback
+    if (image is Map && image['url'] != null) {
+      return image['url'].toString();
+    }
+
+    return '';
+  }
+
+  Widget _imagePlaceholder() {
+    return Center(
+      child: SizedBox(
+        width: 410,
+        height: 280,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            color: Colors.grey.shade200,
+            child: const Icon(
+              Icons.directions_car_filled_outlined,
+              size: 48,
+              color: Colors.grey,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _carImage(String src) {
+    return Center(
+      child: SizedBox(
+        width: 410,
+        height: 280,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.network(
+            src,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) {
+              return Container(
+                color: Colors.grey.shade200,
+                child: const Icon(
+                  Icons.directions_car_filled_outlined,
+                  size: 48,
+                  color: Colors.grey,
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final car = (variant['car'] ?? {}) as Map;
     final provider = (variant['provider'] ?? {}) as Map;
-    final List images = (variant['images'] ?? []) as List;
+    final List images = variant['images'] is List ? variant['images'] as List : [];
 
     final brand = (car['brand'] ?? '').toString();
     final model = (car['model'] ?? '').toString();
     final year = (car['year'] ?? '').toString();
-    final title = [brand, model, year].where((e) => e.toString().trim().isNotEmpty).join(' ');
+
+    final title = [brand, model, year]
+        .where((e) => e.toString().trim().isNotEmpty)
+        .join(' ');
 
     final color = (variant['color'] ?? '').toString();
     final fuel = (car['fuelType'] ?? '').toString();
@@ -331,13 +435,19 @@ class _DetailsView extends StatelessWidget {
     final providerPhone = (provider['phone'] ?? provider['mobile'] ?? '').toString();
     final providerCity = (provider['city'] ?? '').toString();
 
-    final priceNum = (variant['rentalPricePerDay'] is num) ? (variant['rentalPricePerDay'] as num) : 0;
-    final depositNum = (variant['depositAmount'] is num) ? (variant['depositAmount'] as num) : 0;
-    final description = (variant['description'] ?? car['description'] ?? '').toString();
+    final priceNum = variant['rentalPricePerDay'] is num
+        ? variant['rentalPricePerDay'] as num
+        : 0;
+
+    final depositNum = variant['depositAmount'] is num
+        ? variant['depositAmount'] as num
+        : 0;
+
+    final description =
+        (variant['description'] ?? car['description'] ?? '').toString();
 
     return CustomScrollView(
       slivers: [
-        // Image header without an AppBar
         SliverToBoxAdapter(
           child: SizedBox(
             height: 320,
@@ -347,45 +457,22 @@ class _DetailsView extends StatelessWidget {
               children: [
                 PageView.builder(
                   itemCount: images.isEmpty ? 1 : images.length,
-                  onPageChanged: onImgChanged, // ← keep dots in sync
+                  onPageChanged: onImgChanged,
                   itemBuilder: (context, i) {
                     if (images.isEmpty) {
-                      return Center(
-                        child: SizedBox(
-                          width: 410,
-                          height: 280,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Container(
-                              color: Colors.grey.shade200,
-                              child: const Icon(Icons.directions_car_filled_outlined, size: 48),
-                            ),
-                          ),
-                        ),
-                      );
+                      return _imagePlaceholder();
                     }
-                    final src = images[i]?['filepath'] ?? '';
-                    return Center(
-                      child: SizedBox(
-                        width: 410, // exact width
-                        height: 280, // exact height
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.network(
-                            src,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: Colors.grey.shade200,
-                              child: const Icon(Icons.directions_car_filled_outlined, size: 48),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
+
+                    final src = getCarImageUrl(images[i]);
+
+                    if (src.isEmpty) {
+                      return _imagePlaceholder();
+                    }
+
+                    return _carImage(src);
                   },
                 ),
 
-                // dots
                 if (images.length > 1)
                   Positioned(
                     bottom: 10,
@@ -409,7 +496,6 @@ class _DetailsView extends StatelessWidget {
                     ),
                   ),
 
-                // Heart overlay (top-right of the image header)
                 Positioned(
                   top: 20,
                   right: 12,
@@ -424,16 +510,25 @@ class _DetailsView extends StatelessWidget {
                               child: SizedBox(
                                 width: 18,
                                 height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
                               ),
                             )
                           : IconButton(
                               onPressed: onToggleWishlist,
                               icon: Icon(
-                                isWishlisted ? Icons.favorite : Icons.favorite_border,
-                                color: isWishlisted ? Colors.redAccent : Colors.white,
+                                isWishlisted
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
+                                color: isWishlisted
+                                    ? Colors.redAccent
+                                    : Colors.white,
                               ),
-                              tooltip: isWishlisted ? 'Remove from wishlist' : 'Add to wishlist',
+                              tooltip: isWishlisted
+                                  ? 'Remove from wishlist'
+                                  : 'Add to wishlist',
                             ),
                     ),
                   ),
@@ -449,14 +544,16 @@ class _DetailsView extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // title + price
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: Text(
                         title.isEmpty ? 'Car details' : title,
-                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     Column(
@@ -465,7 +562,10 @@ class _DetailsView extends StatelessWidget {
                         if (priceNum > 0)
                           Text(
                             '${money(priceNum)}/day',
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         if (depositNum > 0) const SizedBox(height: 2),
                         if (depositNum > 0)
@@ -477,22 +577,48 @@ class _DetailsView extends StatelessWidget {
                     ),
                   ],
                 ),
+
                 const SizedBox(height: 12),
 
-                // spec chips
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: [
                     if (providerName.isNotEmpty)
-                      _SpecChip(icon: Icons.store_mall_directory, label: providerName),
-                    if (category.isNotEmpty) _SpecChip(icon: Icons.category_outlined, label: category),
-                    if (color.isNotEmpty) _ColorChip(colorName: color, color: colorFromName(color)),
-                    if (fuel.isNotEmpty) _SpecChip(icon: fuelIcon(fuel), label: fuel),
+                      _SpecChip(
+                        icon: Icons.store_mall_directory,
+                        label: providerName,
+                      ),
+                    if (category.isNotEmpty)
+                      _SpecChip(
+                        icon: Icons.category_outlined,
+                        label: category,
+                      ),
+                    if (color.isNotEmpty)
+                      _ColorChip(
+                        colorName: color,
+                        color: colorFromName(color),
+                      ),
+                    if (fuel.isNotEmpty)
+                      _SpecChip(
+                        icon: fuelIcon(fuel),
+                        label: fuel,
+                      ),
                     if (transmission.isNotEmpty)
-                      _SpecChip(icon: transmissionIcon(transmission), label: transmission),
-                    if (seats.isNotEmpty) _SpecChip(icon: Icons.event_seat, label: seatLabel(seats)),
-                    if (year.isNotEmpty) _SpecChip(icon: Icons.calendar_month_outlined, label: 'Model $year'),
+                      _SpecChip(
+                        icon: transmissionIcon(transmission),
+                        label: transmission,
+                      ),
+                    if (seats.isNotEmpty)
+                      _SpecChip(
+                        icon: Icons.event_seat,
+                        label: seatLabel(seats),
+                      ),
+                    if (year.isNotEmpty)
+                      _SpecChip(
+                        icon: Icons.calendar_month_outlined,
+                        label: 'Model $year',
+                      ),
                   ],
                 ),
 
@@ -500,33 +626,76 @@ class _DetailsView extends StatelessWidget {
                 const Divider(height: 1),
 
                 const SizedBox(height: 16),
-                const Text('Description', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                const Text(
+                  'Description',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 const SizedBox(height: 6),
                 Text(
                   description.isEmpty ? 'No description provided.' : description,
-                  style: const TextStyle(fontSize: 14, height: 1.4),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    height: 1.4,
+                  ),
                 ),
 
                 const SizedBox(height: 16),
                 const Divider(height: 1),
 
                 const SizedBox(height: 16),
-                const Text('Provider', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                const Text(
+                  'Provider',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 const SizedBox(height: 8),
-                _InfoRow(icon: Icons.store, title: 'Name', value: providerName),
-                if (providerCity.isNotEmpty) _InfoRow(icon: Icons.location_on_outlined, title: 'City', value: providerCity),
-                if (providerPhone.isNotEmpty) _InfoRow(icon: Icons.call, title: 'Phone', value: providerPhone),
+                _InfoRow(
+                  icon: Icons.store,
+                  title: 'Name',
+                  value: providerName,
+                ),
+                if (providerCity.isNotEmpty)
+                  _InfoRow(
+                    icon: Icons.location_on_outlined,
+                    title: 'City',
+                    value: providerCity,
+                  ),
+                if (providerPhone.isNotEmpty)
+                  _InfoRow(
+                    icon: Icons.call,
+                    title: 'Phone',
+                    value: providerPhone,
+                  ),
 
                 const SizedBox(height: 16),
                 const Divider(height: 1),
 
                 const SizedBox(height: 16),
-                const Text('Rental details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                const Text(
+                  'Rental details',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 const SizedBox(height: 8),
-                const _Bullet(text: 'Daily price includes standard mileage unless stated otherwise.'),
-                const _Bullet(text: 'Refundable deposit required on pickup.'),
-                const _Bullet(text: 'Valid ID and driving license are required.'),
-                const _Bullet(text: 'Fuel policy as per provider terms.'),
+                const _Bullet(
+                  text: 'Daily price includes standard mileage unless stated otherwise.',
+                ),
+                const _Bullet(
+                  text: 'Refundable deposit required on pickup.',
+                ),
+                const _Bullet(
+                  text: 'Valid ID and driving license are required.',
+                ),
+                const _Bullet(
+                  text: 'Fuel policy as per provider terms.',
+                ),
 
                 const SizedBox(height: 100),
               ],
@@ -541,7 +710,9 @@ class _DetailsView extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
               decoration: BoxDecoration(
                 color: Colors.white,
-                border: Border(top: BorderSide(color: Colors.grey.shade300)),
+                border: Border(
+                  top: BorderSide(color: Colors.grey.shade300),
+                ),
               ),
               child: Row(
                 children: [
@@ -555,8 +726,13 @@ class _DetailsView extends StatelessWidget {
                         backgroundColor: Colors.blueAccent,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        textStyle: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
@@ -564,8 +740,13 @@ class _DetailsView extends StatelessWidget {
                   OutlinedButton(
                     onPressed: onContact,
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 14,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                     child: const Icon(Icons.chat_outlined),
                   ),
@@ -584,12 +765,19 @@ class _DetailsView extends StatelessWidget {
 class _SpecChip extends StatelessWidget {
   final IconData icon;
   final String label;
-  const _SpecChip({required this.icon, required this.label});
+
+  const _SpecChip({
+    required this.icon,
+    required this.label,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 6,
+      ),
       decoration: BoxDecoration(
         border: Border.all(color: Colors.grey.shade300),
         borderRadius: BorderRadius.circular(10),
@@ -599,7 +787,10 @@ class _SpecChip extends StatelessWidget {
         children: [
           Icon(icon, size: 16),
           const SizedBox(width: 6),
-          Text(label, style: const TextStyle(fontSize: 12)),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12),
+          ),
         ],
       ),
     );
@@ -609,12 +800,19 @@ class _SpecChip extends StatelessWidget {
 class _ColorChip extends StatelessWidget {
   final String colorName;
   final Color color;
-  const _ColorChip({required this.colorName, required this.color});
+
+  const _ColorChip({
+    required this.colorName,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 6,
+      ),
       decoration: BoxDecoration(
         border: Border.all(color: Colors.grey.shade300),
         borderRadius: BorderRadius.circular(10),
@@ -632,7 +830,10 @@ class _ColorChip extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 6),
-          Text(colorName, style: const TextStyle(fontSize: 12)),
+          Text(
+            colorName,
+            style: const TextStyle(fontSize: 12),
+          ),
         ],
       ),
     );
@@ -643,7 +844,12 @@ class _InfoRow extends StatelessWidget {
   final IconData icon;
   final String title;
   final String value;
-  const _InfoRow({required this.icon, required this.title, required this.value});
+
+  const _InfoRow({
+    required this.icon,
+    required this.title,
+    required this.value,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -651,10 +857,19 @@ class _InfoRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: Colors.black87),
+          Icon(
+            icon,
+            size: 18,
+            color: Colors.black87,
+          ),
           const SizedBox(width: 10),
-          Text('$title: ', style: const TextStyle(fontWeight: FontWeight.w600)),
-          Expanded(child: Text(value)),
+          Text(
+            '$title: ',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          Expanded(
+            child: Text(value),
+          ),
         ],
       ),
     );
@@ -663,7 +878,10 @@ class _InfoRow extends StatelessWidget {
 
 class _Bullet extends StatelessWidget {
   final String text;
-  const _Bullet({required this.text});
+
+  const _Bullet({
+    required this.text,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -671,7 +889,9 @@ class _Bullet extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text('•  '),
-        Expanded(child: Text(text)),
+        Expanded(
+          child: Text(text),
+        ),
       ],
     );
   }
@@ -680,7 +900,11 @@ class _Bullet extends StatelessWidget {
 class _ErrorView extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
-  const _ErrorView({required this.message, required this.onRetry});
+
+  const _ErrorView({
+    required this.message,
+    required this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -691,9 +915,16 @@ class _ErrorView extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, size: 40, color: Colors.redAccent),
+              const Icon(
+                Icons.error_outline,
+                size: 40,
+                color: Colors.redAccent,
+              ),
               const SizedBox(height: 12),
-              Text(message, textAlign: TextAlign.center),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 12),
               ElevatedButton.icon(
                 onPressed: onRetry,

@@ -1,6 +1,8 @@
 import CarVariant from "../../models/carVariant.js";
 import Provider from "../../models/provider.js";
 import Car from "../../models/car.js";
+import { uploadBufferToCloudinary } from "../../utils/uploadToCloudinary.js";
+import cloudinary from "../../config/cloudinary.js";
 
 export const createCarVariant = async (req, res) => {
   try {
@@ -123,3 +125,87 @@ export const getAllCarsForProvider = async (req, res) => {
       res.status(500).json({ message: error.message });
     }
   }
+
+
+
+
+
+export const uploadCarVariantImages = async (req, res) => {
+  let uploadedPublicIds = [];
+
+  try {
+    const { carVariantId } = req.params;
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: "No images uploaded" });
+    }
+
+    const carVariant = await CarVariant.findById(carVariantId);
+
+    if (!carVariant) {
+      return res.status(404).json({ message: "Car variant not found" });
+    }
+
+    const oldImages = carVariant.images || [];
+    const oldPublicIds = carVariant.imagePublicIds || [];
+
+    const currentImageCount = oldImages.length;
+    const newImageCount = req.files.length;
+    const totalImageCount = currentImageCount + newImageCount;
+
+    if (totalImageCount > 10) {
+      return res.status(400).json({
+        message: `Maximum 10 images allowed per car variant. This car already has ${currentImageCount} image(s), so you can only upload ${10 - currentImageCount} more.`,
+      });
+    }
+
+    // Upload new images to Cloudinary
+    const uploadResults = await Promise.all(
+      req.files.map((file) =>
+        uploadBufferToCloudinary(
+          file.buffer,
+          "car-rental/car-variants/images"
+        )
+      )
+    );
+
+    const newImageUrls = uploadResults.map((result) => result.secure_url);
+    const newPublicIds = uploadResults.map((result) => result.public_id);
+
+    uploadedPublicIds = newPublicIds;
+
+    // Append new images, do not replace old ones
+    carVariant.images = [...oldImages, ...newImageUrls];
+    carVariant.imagePublicIds = [...oldPublicIds, ...newPublicIds];
+
+    await carVariant.save();
+
+    return res.status(200).json({
+      message: "Car variant images uploaded successfully",
+      images: carVariant.images,
+      imagePublicIds: carVariant.imagePublicIds,
+      imageCount: carVariant.images.length,
+      remainingSlots: 10 - carVariant.images.length,
+    });
+
+  } catch (error) {
+    console.error("Upload car variant images error:", error);
+
+    // Cleanup newly uploaded images if DB save failed
+    for (const publicId of uploadedPublicIds) {
+      try {
+        await cloudinary.uploader.destroy(publicId, {
+          resource_type: "image",
+          invalidate: true,
+        });
+      } catch (deleteError) {
+        console.error("Failed to cleanup uploaded image:", deleteError);
+      }
+    }
+
+    return res.status(500).json({
+      message: "Failed to upload car variant images",
+      error: error.message,
+    });
+  }
+};
