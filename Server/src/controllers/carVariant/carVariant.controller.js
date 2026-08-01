@@ -1,8 +1,19 @@
+import mongoose from "mongoose";
+
+import cloudinary from "../../config/cloudinary.js";
+import Car from "../../models/car.js";
 import CarVariant from "../../models/carVariant.js";
 import Provider from "../../models/provider.js";
-import Car from "../../models/car.js";
+import { getRecommendationsForRenter } from "../../services/recommendation.service.js";
 import { uploadBufferToCloudinary } from "../../utils/uploadToCloudinary.js";
-import cloudinary from "../../config/cloudinary.js";
+
+const SAFE_PROVIDER_FIELDS =
+  "companyName address.city address.country profilePicture isVerified status";
+
+const populatePublicCarData = (query) =>
+  query
+    .populate("provider", SAFE_PROVIDER_FIELDS)
+    .populate("car");
 
 export const createCarVariant = async (req, res) => {
   try {
@@ -17,31 +28,45 @@ export const createCarVariant = async (req, res) => {
       images,
     } = req.body;
 
-    // Validate required fields
-    if (!provider || !car || !color || !registrationNumber || !rentalPricePerDay || !depositAmount) {
-      return res.status(400).json({ message: "All required fields must be filled" });
+    if (
+      !provider ||
+      !car ||
+      !color ||
+      !registrationNumber ||
+      rentalPricePerDay == null ||
+      depositAmount == null
+    ) {
+      return res.status(400).json({
+        message: "All required fields must be filled",
+      });
     }
 
-    // Check if provider exists
-    const existingProvider = await Provider.findById(provider);
+    if (
+      !mongoose.isValidObjectId(provider) ||
+      !mongoose.isValidObjectId(car)
+    ) {
+      return res.status(400).json({ message: "Invalid provider or car ID" });
+    }
+
+    const [existingProvider, existingCar, existingVariant] = await Promise.all([
+      Provider.findById(provider),
+      Car.findById(car),
+      CarVariant.findOne({ registrationNumber: registrationNumber.trim() }),
+    ]);
+
     if (!existingProvider) {
       return res.status(404).json({ message: "Provider not found" });
     }
-
-    // Check if car exists
-    const existingCar = await Car.findById(car);
     if (!existingCar) {
       return res.status(404).json({ message: "Car not found" });
     }
-
-    // Check if registration number is unique
-    const existingVariant = await CarVariant.findOne({ registrationNumber });
     if (existingVariant) {
-      return res.status(400).json({ message: "Car with this registration number already exists" });
+      return res.status(409).json({
+        message: "Car with this registration number already exists",
+      });
     }
 
-    // Create new car variant
-    const newCarVariant = new CarVariant({
+    const newCarVariant = await CarVariant.create({
       provider,
       car,
       color,
@@ -52,83 +77,127 @@ export const createCarVariant = async (req, res) => {
       images,
     });
 
-    // Save to database
-    await newCarVariant.save();
-
-    res.status(201).json({
+    return res.status(201).json({
       message: "Car variant created successfully",
       carVariant: newCarVariant,
     });
   } catch (error) {
-    res.status(500).json({ message: "Internal Server Error", error: error.message });
+    console.error("Create car variant error:", error);
+    return res.status(500).json({
+      message: "Internal Server Error",
+      error: error.message,
+    });
   }
 };
 
-
-
 export const getAllCarsForProvider = async (req, res) => {
-    try {
-      const { providerId } = req.params;  // Get providerId from request params
-      const { model } = req.query; // Optional model filter from query parameters
-  
-      // Find cars for the given provider
-      let query = { provider: providerId };
-      if (model) {
-        // If model is provided, add model filter
-        query.model = model;
-      }
-  
-      const cars = await CarVariant.find(query);  // Find all cars matching the query
-  
-      if (cars.length === 0) {
-        return res.status(404).json({ message: "No cars found for this provider" });
-      }
-  
-      return res.status(200).json(cars);
-    } catch (error) {
-      console.error(error);
-      return res.status(500).json({ message: "Server Error" });
+  try {
+    const { providerId } = req.params;
+    const model = req.query.model?.toString().trim();
+
+    if (!mongoose.isValidObjectId(providerId)) {
+      return res.status(400).json({ message: "Invalid provider ID" });
     }
-  };
 
-  export const getCarVariantsByCarId = async (req, res) => {
-    try {
-      const {carId} = req.params;
+    const query = { provider: providerId };
 
-      const car = await Car.findById(carId);
-      if (!car) {
-        return res.status(404).json({ message: "Car model not found" });
-      }
-
-      const carVariants = await CarVariant.find({ car: carId });
-      res.status(200).json(carVariants);
-    } catch (error) {
-      res.status(500).json({ message: error.message });
+    if (model) {
+      const matchingCars = await Car.find({
+        model: { $regex: model, $options: "i" },
+      }).select("_id");
+      query.car = { $in: matchingCars.map((car) => car._id) };
     }
+
+    const cars = await CarVariant.find(query).populate("car");
+    return res.status(200).json(cars);
+  } catch (error) {
+    console.error("Get provider cars error:", error);
+    return res.status(500).json({ message: "Server Error" });
   }
+};
 
-  export const getAllAvaiableCarVariants = async (req, res) => {
-    try {
-      const carVariants = await CarVariant.find(  { isAvailable: true }).populate('provider').populate('car');
-      res.status(200).json(carVariants);
-    } catch (error) {
-      res.status(500).json({ message: error.message });
+export const getCarVariantsByCarId = async (req, res) => {
+  try {
+    const { carId } = req.params;
+
+    if (!mongoose.isValidObjectId(carId)) {
+      return res.status(400).json({ message: "Invalid car ID" });
     }
-  }
 
-  export const getCarVariantByID = async (req, res) => {
-    try {
-      const {carVariantId} = req.params;
-      const carVariant = await CarVariant.findById(carVariantId).populate('provider').populate('car');
-      res.status(200).json(carVariant);
-    } catch (error) {
-      res.status(500).json({ message: error.message });
+    const car = await Car.findById(carId);
+    if (!car) {
+      return res.status(404).json({ message: "Car model not found" });
     }
+
+    const carVariants = await CarVariant.find({ car: carId }).populate(
+      "provider",
+      SAFE_PROVIDER_FIELDS
+    );
+    return res.status(200).json(carVariants);
+  } catch (error) {
+    console.error("Get variants by car error:", error);
+    return res.status(500).json({ message: error.message });
   }
+};
 
+export const getAllAvaiableCarVariants = async (req, res) => {
+  try {
+    const carVariants = await CarVariant.find({
+      isAvailable: true,
+    })
+      .populate("provider")
+      .populate("car");
 
+    return res.status(200).json(carVariants);
+  } catch (error) {
+    return res.status(500).json({
+      message: error.message,getAllAvaiableCarVariants 
+    });
+  }
+};
 
+export const getRecommendedCarVariants = async (req, res) => {
+  try {
+    const requestedLimit = Number.parseInt(req.query.limit, 10);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(20, Math.max(1, requestedLimit))
+      : 8;
+    const recommendations = await getRecommendationsForRenter(
+      req.params.renterId,
+      limit
+    );
 
+    return res.status(200).json(recommendations);
+  } catch (error) {
+    console.error("Get recommendations error:", error);
+    return res.status(error.statusCode ?? 500).json({
+      message: error.message ?? "Failed to load recommendations",
+    });
+  }
+};
+
+export const getCarVariantByID = async (req, res) => {
+  try {
+    const { carVariantId } = req.params;
+
+    if (!mongoose.isValidObjectId(carVariantId)) {
+      return res.status(400).json({ message: "Invalid car variant ID" });
+    }
+
+    const carVariant = await populatePublicCarData(
+      CarVariant.findById(carVariantId)
+    );
+
+    if (!carVariant) {
+      return res.status(404).json({ message: "Car variant not found" });
+    }
+
+    return res.status(200).json(carVariant);
+  } catch (error) {
+    console.error("Get car variant error:", error);
+    return res.status(500).json({ message: error.message });
+  }
+};
 
 export const uploadCarVariantImages = async (req, res) => {
   let uploadedPublicIds = [];
@@ -136,30 +205,30 @@ export const uploadCarVariantImages = async (req, res) => {
   try {
     const { carVariantId } = req.params;
 
+    if (!mongoose.isValidObjectId(carVariantId)) {
+      return res.status(400).json({ message: "Invalid car variant ID" });
+    }
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ message: "No images uploaded" });
     }
 
     const carVariant = await CarVariant.findById(carVariantId);
-
     if (!carVariant) {
       return res.status(404).json({ message: "Car variant not found" });
     }
 
-    const oldImages = carVariant.images || [];
-    const oldPublicIds = carVariant.imagePublicIds || [];
-
-    const currentImageCount = oldImages.length;
-    const newImageCount = req.files.length;
-    const totalImageCount = currentImageCount + newImageCount;
+    const oldImages = carVariant.images ?? [];
+    const oldPublicIds = carVariant.imagePublicIds ?? [];
+    const totalImageCount = oldImages.length + req.files.length;
 
     if (totalImageCount > 10) {
       return res.status(400).json({
-        message: `Maximum 10 images allowed per car variant. This car already has ${currentImageCount} image(s), so you can only upload ${10 - currentImageCount} more.`,
+        message:
+          `Maximum 10 images allowed. This car already has ` +
+          `${oldImages.length}, so you can upload ${10 - oldImages.length} more.`,
       });
     }
 
-    // Upload new images to Cloudinary
     const uploadResults = await Promise.all(
       req.files.map((file) =>
         uploadBufferToCloudinary(
@@ -168,16 +237,12 @@ export const uploadCarVariantImages = async (req, res) => {
         )
       )
     );
-
     const newImageUrls = uploadResults.map((result) => result.secure_url);
     const newPublicIds = uploadResults.map((result) => result.public_id);
-
     uploadedPublicIds = newPublicIds;
 
-    // Append new images, do not replace old ones
     carVariant.images = [...oldImages, ...newImageUrls];
     carVariant.imagePublicIds = [...oldPublicIds, ...newPublicIds];
-
     await carVariant.save();
 
     return res.status(200).json({
@@ -187,21 +252,17 @@ export const uploadCarVariantImages = async (req, res) => {
       imageCount: carVariant.images.length,
       remainingSlots: 10 - carVariant.images.length,
     });
-
   } catch (error) {
     console.error("Upload car variant images error:", error);
 
-    // Cleanup newly uploaded images if DB save failed
-    for (const publicId of uploadedPublicIds) {
-      try {
-        await cloudinary.uploader.destroy(publicId, {
+    await Promise.allSettled(
+      uploadedPublicIds.map((publicId) =>
+        cloudinary.uploader.destroy(publicId, {
           resource_type: "image",
           invalidate: true,
-        });
-      } catch (deleteError) {
-        console.error("Failed to cleanup uploaded image:", deleteError);
-      }
-    }
+        })
+      )
+    );
 
     return res.status(500).json({
       message: "Failed to upload car variant images",

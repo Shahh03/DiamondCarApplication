@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:project/renter/navbar_pages/bottom_nav_bar.dart';
-import '../account/wishlist/myWishlist.dart';
-import '../search/search.dart';
-import '../myRentals/myRentals.dart';
-import 'upcomingRentals.dart';
-import 'quickActions.dart';
-import 'browseCars.dart';
-import '../account/account.dart';
-import 'package:project/renter/api/user_api.dart';
+
 import '../../api/user_api.dart';
+import '../account/account.dart';
+import '../myRentals/myRentals.dart';
+import '../search/search.dart';
+import 'browseCars.dart';
+import 'recommendedCars.dart';
+import 'upcomingRentals.dart';
+
+const _primary = Color(0xFF1D4ED8);
+const _primaryDark = Color(0xFF1E40AF);
+const _background = Color(0xFFF5F7FB);
+const _ink = Color(0xFF0F172A);
+const _muted = Color(0xFF64748B);
+const _border = Color(0xFFE2E8F0);
+
 class RenterHome extends StatefulWidget {
   final String renterId;
 
@@ -19,221 +26,151 @@ class RenterHome extends StatefulWidget {
 }
 
 class _RenterHomeState extends State<RenterHome> {
-  Map<String, dynamic>? userData;
-  bool isLoading = true;
-  String? error;
-
-  Future<void> getUserData() async {
-  setState(() {
-    isLoading = true;
-    error = null;
-  });
-
-  try {
-    final data = await UserApi.getUserById(widget.renterId);
-
-    if (!mounted) return;
-
-    setState(() {
-      userData = data;
-      isLoading = false;
-    });
-  } catch (e) {
-    if (!mounted) return;
-
-    setState(() {
-      error = e.toString();
-      isLoading = false;
-    });
-  }
-}
+  Map<String, dynamic>? _userData;
+  bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    getUserData();
+    _loadUser();
   }
 
-  void handleQuickAction(String action) {
-    if (action == 'favorites') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => WishlistPage(renterId: widget.renterId),
-        ),
-      );
-    } else if (action == 'browse') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => RenterSearch(id: widget.renterId),
-        ),
-      );
-    } else if (action == 'rentals') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => RenterMyRentals(id: widget.renterId),
-        ),
-      );
+  Future<void> _loadUser() async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
     }
+
+    try {
+      final data = await UserApi.getUserById(widget.renterId);
+      if (!mounted) return;
+
+      setState(() {
+        _userData = data;
+        _isLoading = false;
+      });
+    } catch (error) {
+      debugPrint('Home user load error: $error');
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'We could not load your account. Please try again.';
+      });
+    }
+  }
+
+  String get _name {
+    final value = (_userData?['name'] ?? 'User').toString().trim();
+    return value.isEmpty ? 'User' : value;
+  }
+
+  String get _firstName => _name.split(RegExp(r'\s+')).first;
+
+  String get _currency =>
+      (_userData?['currency'] ?? 'EGP').toString().toUpperCase();
+
+  Map<String, dynamic>? get _fxRates {
+    final rates = _userData?['fxRates'];
+    return rates is Map ? Map<String, dynamic>.from(rates) : null;
+  }
+
+  String get _greeting {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  void _openSearch() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => RenterSearch(id: widget.renterId)),
+    );
+  }
+
+  void _openRentals() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RenterMyRentals(id: widget.renterId),
+      ),
+    );
+  }
+
+  void _openProfile() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => RenterProfile(id: widget.renterId)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final name = (userData?['name'] ?? 'User').toString();
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
+      backgroundColor: _background,
       appBar: AppBar(
         automaticallyImplyLeading: false,
         elevation: 0,
-        titleSpacing: 16,
-        title: const Text(
-          'Home',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF2563EB), Color(0xFF60A5FA)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+        foregroundColor: Colors.white,
+        titleSpacing: 18,
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.diamond_outlined, size: 23),
+            SizedBox(width: 8),
+            Text(
+              'DiamondCar',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.35,
+              ),
             ),
-          ),
+          ],
         ),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
-            child: GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => RenterProfile(id: widget.renterId),
-                  ),
-                );
-              },
-              child: CircleAvatar(
-                radius: 18,
-                backgroundColor: Colors.white.withOpacity(0.25),
-                child: Text(
-                  name.isNotEmpty ? name[0].toUpperCase() : "U",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
+            child: Semantics(
+              button: true,
+              label: 'Open account',
+              child: InkWell(
+                onTap: _openProfile,
+                customBorder: const CircleBorder(),
+                child: CircleAvatar(
+                  radius: 19,
+                  backgroundColor: Colors.white.withOpacity(0.18),
+                  child: Text(
+                    _name[0].toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
         ],
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [_primaryDark, Color(0xFF2563EB)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
       ),
       body: RefreshIndicator(
-        onRefresh: getUserData,
-        child: Builder(
-          builder: (_) {
-            if (isLoading) {
-              return ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                children: const [
-                  _SkeletonHeader(),
-                  SizedBox(height: 16),
-                  _SkeletonCard(height: 90),
-                  SizedBox(height: 16),
-                  _SkeletonCard(height: 150),
-                  SizedBox(height: 16),
-                  _SkeletonCard(height: 210),
-                ],
-              );
-            }
-
-            if (error != null) {
-              return ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
-                children: [
-                  _SectionCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          "Something went wrong",
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          error!,
-                          style: TextStyle(color: Colors.grey[700]),
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: getUserData,
-                            icon: const Icon(Icons.refresh),
-                            label: const Text("Try again"),
-                          ),
-                        )
-                      ],
-                    ),
-                  )
-                ],
-              );
-            }
-
-            return ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              children: [
-                // WELCOME
-                _WelcomeHeader(name: name),
-
-                const SizedBox(height: 16),
-
-                // QUICK ACTIONS
-                _SectionTitle(
-                  title: "Quick Actions",
-                  subtitle: "Jump back in quickly",
-                  icon: Icons.flash_on_rounded,
-                ),
-                const SizedBox(height: 10),
-                _SectionCard(
-                  child: QuickActions(onAction: handleQuickAction),
-                ),
-
-                const SizedBox(height: 18),
-
-                // UPCOMING RENTALS
-                _SectionTitle(
-                  title: "Upcoming Rentals",
-                  subtitle: "Your next trips",
-                  icon: Icons.event_available_rounded,
-                ),
-                const SizedBox(height: 10),
-                _SectionCard(
-                  padding: const EdgeInsets.all(0),
-                  child: UpcomingRentals(renterId: widget.renterId),
-                ),
-
-                const SizedBox(height: 18),
-
-                // BROWSE CARS
-                _SectionTitle(
-                  title: "Looking for a ride?",
-                  subtitle: "Recommended for you",
-                  icon: Icons.directions_car_rounded,
-                ),
-                const SizedBox(height: 10),
-                _SectionCard(
-                  padding: const EdgeInsets.all(0),
-                  child: BrowseCars(renterId: widget.renterId),
-                ),
-              ],
-            );
-          },
-        ),
+        color: _primary,
+        onRefresh: _loadUser,
+        child: _buildBody(),
       ),
       bottomNavigationBar: BottomNavBar(
         currentIndex: 0,
@@ -241,45 +178,202 @@ class _RenterHomeState extends State<RenterHome> {
       ),
     );
   }
+
+  Widget _buildBody() {
+    if (_isLoading) return const _HomeLoading();
+
+    if (_errorMessage != null) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: [
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 760),
+              child: _HomeError(
+                message: _errorMessage!,
+                onRetry: _loadUser,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final horizontalPadding = constraints.maxWidth >= 800 ? 28.0 : 16.0;
+
+        return ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            horizontalPadding,
+            18,
+            horizontalPadding,
+            30,
+          ),
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 760),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _WelcomeHero(
+                      greeting: _greeting,
+                      name: _firstName,
+                      onSearch: _openSearch,
+                    ),
+                    const SizedBox(height: 25),
+                    _SectionHeader(
+                      title: 'Upcoming rentals',
+                      subtitle: 'Your next confirmed bookings',
+                      actionLabel: 'See all',
+                      onAction: _openRentals,
+                    ),
+                    const SizedBox(height: 12),
+                    UpcomingRentals(renterId: widget.renterId),
+                    const SizedBox(height: 26),
+                    _SectionHeader(
+                      title: 'Recommended for you',
+                      subtitle: 'Based on your activity and preferences',
+                      actionLabel: 'View all',
+                      onAction: _openSearch,
+                    ),
+                    const SizedBox(height: 12),
+                    RecommendedCars(
+                      renterId: widget.renterId,
+                      currency: _currency,
+                      fxRates: _fxRates,
+                    ),
+                    const SizedBox(height: 26),
+                    _SectionHeader(
+                      title: 'Browse by type',
+                      subtitle: 'Find a car that fits your journey',
+                      actionLabel: 'View all',
+                      onAction: _openSearch,
+                    ),
+                    const SizedBox(height: 12),
+                    BrowseCars(renterId: widget.renterId),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
 
-/* ---------------- UI Helpers ---------------- */
-
-class _WelcomeHeader extends StatelessWidget {
+class _WelcomeHero extends StatelessWidget {
+  final String greeting;
   final String name;
-  const _WelcomeHeader({required this.name});
+  final VoidCallback onSearch;
+
+  const _WelcomeHero({
+    required this.greeting,
+    required this.name,
+    required this.onSearch,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return _SectionCard(
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: const Color(0xFF2563EB).withOpacity(0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(Icons.waving_hand_rounded, color: Color(0xFF2563EB)),
+    return Container(
+      width: double.infinity,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [_primaryDark, Color(0xFF3B82F6)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x331D4ED8),
+            blurRadius: 24,
+            offset: Offset(0, 10),
           ),
-          const SizedBox(width: 12),
-          Expanded(
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -35,
+            top: -45,
+            child: Container(
+              width: 145,
+              height: 145,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Welcome back,",
-                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  name,
+                  '$greeting, $name',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    fontSize: 23,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.45,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Where do you want to drive today?',
+                  style: TextStyle(
+                    color: Color(0xFFDCEAFF),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(15),
+                  child: InkWell(
+                    onTap: onSearch,
+                    borderRadius: BorderRadius.circular(15),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 14,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.search_rounded,
+                            color: _primary,
+                            size: 22,
+                          ),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Search by brand or model',
+                              style: TextStyle(
+                                color: _muted,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            Icons.tune_rounded,
+                            color: _primary,
+                            size: 20,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -291,23 +385,24 @@ class _WelcomeHeader extends StatelessWidget {
   }
 }
 
-class _SectionTitle extends StatelessWidget {
+class _SectionHeader extends StatelessWidget {
   final String title;
   final String subtitle;
-  final IconData icon;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
-  const _SectionTitle({
+  const _SectionHeader({
     required this.title,
     required this.subtitle,
-    required this.icon,
+    this.actionLabel,
+    this.onAction,
   });
 
   @override
   Widget build(BuildContext context) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Icon(icon, size: 18, color: const Color(0xFF111827)),
-        const SizedBox(width: 8),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -315,17 +410,122 @@ class _SectionTitle extends StatelessWidget {
               Text(
                 title,
                 style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF111827),
+                  color: _ink,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.25,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 3),
               Text(
                 subtitle,
-                style: TextStyle(fontSize: 12.5, color: Colors.grey[600]),
+                style: const TextStyle(
+                  color: _muted,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ],
+          ),
+        ),
+        if (actionLabel != null && onAction != null)
+          TextButton(
+            onPressed: onAction,
+            style: TextButton.styleFrom(
+              foregroundColor: _primary,
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            ),
+            child: Text(
+              actionLabel!,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _HomeError extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _HomeError({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 62,
+            height: 62,
+            decoration: const BoxDecoration(
+              color: Color(0xFFFEE2E2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.error_outline_rounded,
+              color: Color(0xFFDC2626),
+              size: 30,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Unable to load home',
+            style: TextStyle(
+              color: _ink,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: _muted, fontSize: 14),
+          ),
+          const SizedBox(height: 18),
+          FilledButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Try again'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeLoading extends StatelessWidget {
+  const _HomeLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(16),
+      children: [
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Column(
+              children: [
+                const _LoadingBlock(height: 178, radius: 24),
+                const SizedBox(height: 24),
+                const _LoadingBlock(height: 122, radius: 20),
+                const SizedBox(height: 12),
+                const _LoadingBlock(height: 122, radius: 20),
+                const SizedBox(height: 24),
+                const _LoadingBlock(height: 286, radius: 20),
+              ],
+            ),
           ),
         ),
       ],
@@ -333,96 +533,20 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-class _SectionCard extends StatelessWidget {
-  final Widget child;
-  final EdgeInsets padding;
-
-  const _SectionCard({
-    required this.child,
-    this.padding = const EdgeInsets.all(14),
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          )
-        ],
-      ),
-      child: child,
-    );
-  }
-}
-
-/* --------- Simple Skeletons (no packages) --------- */
-
-class _SkeletonCard extends StatelessWidget {
+class _LoadingBlock extends StatelessWidget {
   final double height;
-  const _SkeletonCard({required this.height});
+  final double radius;
+
+  const _LoadingBlock({required this.height, required this.radius});
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       height: height,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Container(
-        margin: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: const Color(0xFFE5E7EB),
-          borderRadius: BorderRadius.circular(14),
-        ),
-      ),
-    );
-  }
-}
-
-class _SkeletonHeader extends StatelessWidget {
-  const _SkeletonHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 74,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        children: [
-          const SizedBox(width: 14),
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: const Color(0xFFE5E7EB),
-              borderRadius: BorderRadius.circular(14),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(height: 10, width: 110, color: const Color(0xFFE5E7EB)),
-                const SizedBox(height: 8),
-                Container(height: 14, width: 170, color: const Color(0xFFE5E7EB)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 14),
-        ],
+        color: const Color(0xFFE8EDF5),
+        borderRadius: BorderRadius.circular(radius),
       ),
     );
   }

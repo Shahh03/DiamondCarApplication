@@ -1,5 +1,13 @@
 import express from "express";
-import {getAllCarsForProvider ,createCarVariant,getCarVariantsByCarId ,getAllAvaiableCarVariants , getCarVariantByID , uploadCarVariantImages} from "../controllers/carVariant/carVariant.controller.js";
+import {
+  getAllCarsForProvider,
+  createCarVariant,
+  getCarVariantsByCarId,
+  getAllAvaiableCarVariants,
+  getCarVariantByID,
+  uploadCarVariantImages,
+  getRecommendedCarVariants,
+} from "../controllers/carVariant/carVariant.controller.js";
 
 const router = express.Router();
 import { carUpload } from "../middlewares/upload.js";
@@ -14,10 +22,18 @@ router.get("/carVariant/getAllAvailable/", getAllAvaiableCarVariants); //works
 
 router.get("/carVariant/:carVariantId", getCarVariantByID); //works
 
+
+router.get("/carVariant/recommended/:renterId",getRecommendedCarVariants);
+
 router.post(
   "/carVariant/uploadCarVariantImages/:carVariantId",
   carUpload.array("files", 10),
   uploadCarVariantImages
 );
 
+
+
+
 export default router;
+
+

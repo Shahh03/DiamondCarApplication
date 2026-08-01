@@ -56,42 +56,59 @@ export const createUser = async (req, res) => {
 
 export const loginUser = async (req, res) => {
   try {
-    let { identifier, password } = req.body;
+    const identifier = req.body.identifier?.trim();
+    const password = req.body.password;
 
     if (!identifier || !password) {
-      return res.status(400).json({ message: "Identifier and password are required" });
+      return res.status(400).json({
+        message: "Username/email and password are required",
+      });
     }
 
-    identifier = identifier.toLowerCase();
+    const escapedIdentifier = identifier.replace(
+      /[.*+?^${}()|[\]\\]/g,
+      "\\$&"
+    );
 
-
-    // Look for user where either username OR email matches the identifier
     const existingUser = await User.findOne({
       $or: [
-        { username: identifier },
-        { email: identifier }
-      ]
+        {
+          username: {
+            $regex: `^${escapedIdentifier}$`,
+            $options: "i",
+          },
+        },
+        {
+          email: identifier.toLowerCase(),
+        },
+      ],
     });
 
     if (!existingUser) {
-      return res.status(404).json({ message: "User does not exist" });
+      return res.status(404).json({
+        message: "User does not exist",
+      });
     }
 
-    // Plain text password check
     if (password !== existingUser.password) {
-      return res.status(401).json({ message: "Invalid credentials" });
+      return res.status(401).json({
+        message: "Invalid username/email or password",
+      });
     }
 
-    // Success
-    res.status(200).json({
+    return res.status(200).json({
       message: "Login successful",
-      user: existingUser
+      user: existingUser,
     });
   } catch (error) {
     console.error("Login error:", error);
-    res.status(500).json({ message: "Internal server error" });
+
+    return res.status(500).json({
+      message: "Internal server error",
+    });
   }
 };
+
 
 export const getUserById = async (req, res) => {
   try {
