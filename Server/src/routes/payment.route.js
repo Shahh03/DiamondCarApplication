@@ -1,13 +1,30 @@
 import express from "express";
-import {createPaymentAndBooking ,refundPayment} from "../controllers/payment/payment.controller.js";
 
+import {
+  createCardSetupIntent,
+  createStripePaymentIntent,
+  getSavedPaymentMethods,
+  getStripePaymentStatus,
+  refundPayment,
+  removeSavedPaymentMethod,
+  setDefaultPaymentMethod,
+} from "../controllers/payment/payment.controller.js";
 
 const router = express.Router();
 
-router.post("/paymentAndBooking/create", createPaymentAndBooking); //works
+router.post("/stripe/payment-intent", createStripePaymentIntent);
+router.get(
+  "/stripe/payment-status/:paymentIntentId",
+  getStripePaymentStatus
+);
+router.put("/stripe/refund/:paymentId", refundPayment);
 
-router.put("/payment/refund/:paymentId", refundPayment); //works
-
-
+router.post("/stripe/setup-intent", createCardSetupIntent);
+router.get("/stripe/payment-methods/:renterId", getSavedPaymentMethods);
+router.put("/stripe/payment-methods/default", setDefaultPaymentMethod);
+router.delete(
+  "/stripe/payment-methods/:renterId/:paymentMethodId",
+  removeSavedPaymentMethod
+);
 
 export default router;

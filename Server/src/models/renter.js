@@ -76,6 +76,11 @@ const renterSchema = new mongoose.Schema({
     type: String,
     default: "",
   },
+  stripeCustomerId: {
+  type: String,
+  default: null,
+  trim: true,
+},
   currency: {
     type: String,
     enum: ["USD", "CAD", "GBP", "EUR", "AUD", "EGP","AED", "SAR", "QAR", "OMR", "BHD"],

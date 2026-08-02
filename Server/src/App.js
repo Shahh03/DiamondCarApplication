@@ -2,24 +2,23 @@ import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import morgan from "morgan";
-import initializeRoutes from "./routes/routes.js";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import multer from "multer";
 import fs from "fs";
 
+import initializeRoutes from "./routes/routes.js";
+import { stripeWebhook } from "./controllers/payment/payment.controller.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const currentDir = path.dirname(__filename);
-
 const envPath = path.join(currentDir, "..", ".env");
 
 console.log("Looking for .env at:", envPath);
 console.log(".env exists?", fs.existsSync(envPath));
 
-dotenv.config({
-  path: envPath,
-});
+dotenv.config({ path: envPath });
 
 class App {
   constructor() {
@@ -30,6 +29,7 @@ class App {
 
     console.log("MONGO_URI loaded?", !!process.env.MONGO_URI);
     console.log("Cloudinary loaded?", !!process.env.CLOUDINARY_CLOUD_NAME);
+    console.log("Stripe loaded?", !!process.env.STRIPE_SECRET_KEY);
 
     this.__dirname = currentDir;
   }
@@ -44,19 +44,26 @@ class App {
       process.exit(1);
     }
 
-    await mongoose
-      .connect(this.DB)
-      .then(() => {
-        console.log("MongoDB connected successfully!");
-      })
-      .catch((err) => {
-        console.error("MongoDB connection error:", err);
-        process.exit(1);
-      });
+    try {
+      await mongoose.connect(this.DB);
+      console.log("MongoDB connected successfully!");
+    } catch (error) {
+      console.error("MongoDB connection error:", error);
+      process.exit(1);
+    }
   }
 
   initializeMiddlewares() {
     this.app.use(cors());
+
+    // Stripe must receive the exact, unparsed request bytes to verify the
+    // Stripe-Signature header. Keep this route before express.json().
+    this.app.post(
+      "/stripe/webhook",
+      express.raw({ type: "application/json" }),
+      stripeWebhook
+    );
+
     this.app.use(express.json());
     this.app.use(express.urlencoded({ extended: true }));
 
@@ -76,22 +83,15 @@ class App {
       }
 
       if (err.code === "LIMIT_FILE_SIZE") {
-        return res.status(413).json({
-          error: "File too large.",
-        });
+        return res.status(413).json({ error: "File too large." });
       }
 
       if (err instanceof multer.MulterError) {
-        return res.status(400).json({
-          error: err.message,
-        });
+        return res.status(400).json({ error: err.message });
       }
 
       console.error(err);
-
-      return res.status(500).json({
-        error: "Internal server error",
-      });
+      return res.status(500).json({ error: "Internal server error" });
     });
   }
 

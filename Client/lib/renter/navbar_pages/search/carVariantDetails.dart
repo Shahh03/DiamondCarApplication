@@ -7,6 +7,8 @@ import '../../api/activity_api.dart';
 import '../../api/car_variant_api.dart';
 import '../../api/renter_api.dart';
 
+import '../../bookingCheckout.dart';
+
 const _primary = Color(0xFF1D4ED8);
 const _primaryDark = Color(0xFF1E40AF);
 const _background = Color(0xFFF5F7FB);
@@ -288,8 +290,20 @@ class _CarVariantDetailsState extends State<CarVariantDetails> {
   }
 
   void _bookNow() {
-    // Keep this callback ready for the project's booking route.
-  }
+  final variant = _variant;
+
+  if (variant == null || widget.userId.trim().isEmpty) return;
+
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => BookingCheckoutPage(
+        renterId: widget.userId,
+        variant: variant,
+      ),
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {

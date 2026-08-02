@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../renter/navbar_pages/home/home.dart';
-import '../admin/dashboard.dart';
-import '../provider/dashboard.dart';
 
+import '../admin/dashboard.dart';
+import 'api/auth_api.dart';
+import '../provider/dashboard.dart';
+import '../renter/navbar_pages/home/home.dart';
+
+const _primary = Color(0xFF1D4ED8);
+const _primaryDark = Color(0xFF1E40AF);
+const _background = Color(0xFFF5F7FB);
+const _ink = Color(0xFF0F172A);
+const _muted = Color(0xFF64748B);
+const _border = Color(0xFFE2E8F0);
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -15,251 +21,479 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
-
-  final _emailController = TextEditingController();
+  final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  bool _rememberMe = false;
+  bool _isLoading = false;
+  bool _obscurePassword = true;
 
-  Future<void> submitLoginForm() async {
-  final url = Uri.parse('http://10.0.2.2:8000/user/login');
+  @override
+  void dispose() {
+    _identifierController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
-  final payload = {
-    "identifier": _emailController.text.trim(),  // works for email or username
-    "password": _passwordController.text.trim(),
-  };
+  Future<void> _submitLogin() async {
+    FocusManager.instance.primaryFocus?.unfocus();
 
+    if (!(_formKey.currentState?.validate() ?? false) || _isLoading) return;
 
+    setState(() => _isLoading = true);
 
-  ScaffoldMessenger.of(context).clearSnackBars();
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Logging in...')),
-  );
+    try {
+      final user = await AuthApi.login(
+        identifier: _identifierController.text,
+        password: _passwordController.text,
+      );
 
-  try {
-    final response = await http.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(payload),
-    );
+      if (!mounted) return;
 
+      final id = user['_id'].toString();
+      final type = user['type'].toString();
+      final destination = _destinationFor(type, id);
 
-
-if (response.statusCode == 200 || response.statusCode == 201) {
-  final data = jsonDecode(response.body);
-  final user = data['user'];
-  final String id = user['_id'];
-  final String type = user['type'];
-
-  ScaffoldMessenger.of(context).clearSnackBars();
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Login successful!')),
-  );
-
-  await Future.delayed(const Duration(milliseconds: 500));
-
-  // Navigate to the corresponding dashboard
-  if (type == 'Renter') {
-  Navigator.pushReplacement(
-    context,
-    MaterialPageRoute(
-      builder: (context) => RenterHome(renterId: id),
-    ),
-  );
-} else if (type == 'Provider') {
-  Navigator.pushReplacement(
-    context,
-    MaterialPageRoute(
-      builder: (context) => ProviderDashboard(id: id),
-    ),
-  );
-} else if (type == 'Admin') {
-  Navigator.pushReplacement(
-    context,
-    MaterialPageRoute(
-      builder: (context) => AdminDashboard(id: id),
-    ),
-  );
-} else {
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text("Unknown user type")),
-  );
-}
-
-}
- else {
-      print("❌ Login failed: ${response.body}");
-      ScaffoldMessenger.of(context).clearSnackBars();
-
-      String errorMessage = 'Login failed. Please try again.';
-      try {
-        final data = jsonDecode(response.body);
-        if (data['message'] != null) {
-          errorMessage = data['message'];
-        }
-      } catch (e) {
-        print("Failed to parse error message: $e");
+      if (destination == null) {
+        _showMessage('This account type is not supported.', isError: true);
+        setState(() => _isLoading = false);
+        return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessage)),
-      );
-    }
-  } catch (e) {
-    print("🚨 Error: $e");
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('An error occurred during login.')),
-    );
-  }
-}
+      setState(() => _isLoading = false);
 
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => destination),
+        (route) => false,
+      );
+    } on AuthApiException catch (error) {
+      if (!mounted) return;
+      _showMessage(error.message, isError: true);
+      setState(() => _isLoading = false);
+    } catch (_) {
+      if (!mounted) return;
+      _showMessage('Something went wrong. Please try again.', isError: true);
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Widget? _destinationFor(String type, String id) {
+    switch (type) {
+      case 'Renter':
+        return RenterHome(renterId: id);
+      case 'Provider':
+        return ProviderDashboard(id: id);
+      case 'Admin':
+        return AdminDashboard(id: id);
+      default:
+        return null;
+    }
+  }
+
+  void _showMessage(String message, {bool isError = false}) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            message,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: isError ? const Color(0xFFB91C1C) : _ink,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+      );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: const Text('Login'),
-        elevation: 0,
-      ),
-      backgroundColor: Colors.grey[100],
-      body: SingleChildScrollView(
-        child: Container(
-          margin: const EdgeInsets.all(16),
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black12,
-                blurRadius: 8,
-                offset: Offset(0, 4),
+      backgroundColor: _background,
+      body: Stack(
+        children: [
+          Container(
+            height: 310,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [_primaryDark, _primary, Color(0xFF3B82F6)],
               ),
-            ],
+            ),
           ),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Center(
-                  child: Text(
-                    'Welcome Back!',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Center(
-                  child: Text(
-                    'Log in to continue',
-                    style: TextStyle(fontSize: 16, color: Colors.black54),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                const Text(
-                  'Account Info',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 12),
-
-                _buildField(
-                  controller: _emailController,
-                  label: 'Email or Username',
-                  icon: Icons.email,
-                ),
-                const SizedBox(height: 12),
-
-                _buildField(
-                  controller: _passwordController,
-                  label: 'Password',
-                  icon: Icons.lock,
-                  obscureText: true,
-                ),
-                const SizedBox(height: 12),
-
-               /* CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Remember me'),
-                  value: _rememberMe,
-                  onChanged: (v) => setState(() => _rememberMe = v ?? false),
-                  controlAffinity: ListTileControlAffinity.leading,
-                ),
-                const SizedBox(height: 24),*/
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      if (_formKey.currentState?.validate() ?? false) {
-                        if (_emailController.text.isEmpty ||
-                            _passwordController.text.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text(
-                                    'Please fill in both email and password')),
-                          );
-                          return;
-                        }
-                        submitLoginForm();
-                      }
-                    },
-                    icon: const Icon(Icons.login),
-                    label: const Text('Log In', style: TextStyle(fontSize: 16)),
-                    style: ElevatedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+          SafeArea(
+            child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _BackButton(onTap: () => Navigator.maybePop(context)),
+                      const SizedBox(height: 24),
+                      const _Header(),
+                      const SizedBox(height: 26),
+                      _LoginCard(
+                        formKey: _formKey,
+                        identifierController: _identifierController,
+                        passwordController: _passwordController,
+                        obscurePassword: _obscurePassword,
+                        isLoading: _isLoading,
+                        onTogglePassword: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
+                        onSubmit: _submitLogin,
+                        onSignUp: () {
+                          Navigator.pushNamed(context, '/signup');
+                        },
                       ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BackButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _BackButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withOpacity(0.14),
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: const SizedBox(
+          width: 44,
+          height: 44,
+          child: Icon(Icons.arrow_back_rounded, color: Colors.white),
+        ),
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            _BrandIcon(),
+            SizedBox(width: 11),
+            Text(
+              'DiamondCar',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 22),
+        Text(
+          'Welcome back',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 32,
+            height: 1.1,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.7,
+          ),
+        ),
+        SizedBox(height: 8),
+        Text(
+          'Sign in to continue your journey.',
+          style: TextStyle(
+            color: Color(0xFFDBEAFE),
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BrandIcon extends StatelessWidget {
+  const _BrandIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 38,
+      height: 38,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.16),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.24)),
+      ),
+      child: const Icon(
+        Icons.directions_car_filled_rounded,
+        color: Colors.white,
+        size: 22,
+      ),
+    );
+  }
+}
+
+class _LoginCard extends StatelessWidget {
+  final GlobalKey<FormState> formKey;
+  final TextEditingController identifierController;
+  final TextEditingController passwordController;
+  final bool obscurePassword;
+  final bool isLoading;
+  final VoidCallback onTogglePassword;
+  final VoidCallback onSubmit;
+  final VoidCallback onSignUp;
+
+  const _LoginCard({
+    required this.formKey,
+    required this.identifierController,
+    required this.passwordController,
+    required this.obscurePassword,
+    required this.isLoading,
+    required this.onTogglePassword,
+    required this.onSubmit,
+    required this.onSignUp,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: Colors.white),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1A0F172A),
+            blurRadius: 28,
+            offset: Offset(0, 12),
+          ),
+        ],
+      ),
+      child: AutofillGroup(
+        child: Form(
+          key: formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Sign in',
+                style: TextStyle(
+                  color: _ink,
+                  fontSize: 23,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 22),
+              const _FieldLabel('Email or username'),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: identifierController,
+                enabled: !isLoading,
+                autofillHints: const [AutofillHints.username, AutofillHints.email],
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                style: const TextStyle(
+                  color: _ink,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+                decoration: _fieldDecoration(
+                  hint: 'Enter your email or username',
+                  icon: Icons.person_outline_rounded,
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Enter your email or username';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 18),
+              const _FieldLabel('Password'),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: passwordController,
+                enabled: !isLoading,
+                obscureText: obscurePassword,
+                autofillHints: const [AutofillHints.password],
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => onSubmit(),
+                style: const TextStyle(
+                  color: _ink,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+                decoration: _fieldDecoration(
+                  hint: 'Enter your password',
+                  icon: Icons.lock_outline_rounded,
+                  suffix: IconButton(
+                    onPressed: onTogglePassword,
+                    tooltip: obscurePassword ? 'Show password' : 'Hide password',
+                    icon: Icon(
+                      obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      color: _muted,
                     ),
                   ),
                 ),
-
-                const SizedBox(height: 16),
-                Center(
-                  child: TextButton(
-                    onPressed: () {
-                      Navigator.pushReplacementNamed(context, '/signup');
-                    },
-                    child: const Text("Don’t have an account? Sign up"),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Enter your password';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: FilledButton(
+                  onPressed: isLoading ? null : onSubmit,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _primary,
+                    disabledBackgroundColor: _primary.withOpacity(0.65),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                )
-              ],
-            ),
+                  child: isLoading
+                      ? const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.3,
+                                color: Colors.white,
+                              ),
+                            ),
+                            SizedBox(width: 12),
+                            Text('Signing in...'),
+                          ],
+                        )
+                      : const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text('Log in'),
+                            SizedBox(width: 8),
+                            Icon(Icons.arrow_forward_rounded, size: 20),
+                          ],
+                        ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    'New to DiamondCar?',
+                    style: TextStyle(
+                      color: _muted,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: isLoading ? null : onSignUp,
+                    child: const Text(
+                      'Create account',
+                      style: TextStyle(
+                        color: _primary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildField({
-    required TextEditingController controller,
-    required String label,
+  InputDecoration _fieldDecoration({
+    required String hint,
     required IconData icon,
-    bool obscureText = false,
-    TextInputType keyboardType = TextInputType.text,
-    String? Function(String?)? validator,
+    Widget? suffix,
   }) {
-    return TextFormField(
-      controller: controller,
-      obscureText: obscureText,
-      keyboardType: keyboardType,
-      validator: validator ??
-          (val) => val == null || val.isEmpty ? '$label is required' : null,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon),
-        filled: true,
-        fillColor: Colors.grey[50],
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Colors.grey),
-        ),
+    OutlineInputBorder border(Color color, [double width = 1]) {
+      return OutlineInputBorder(
+        borderRadius: BorderRadius.circular(15),
+        borderSide: BorderSide(color: color, width: width),
+      );
+    }
+
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(
+        color: Color(0xFF94A3B8),
+        fontSize: 15,
+        fontWeight: FontWeight.w500,
+      ),
+      prefixIcon: Icon(icon, color: _primary, size: 22),
+      suffixIcon: suffix,
+      filled: true,
+      fillColor: const Color(0xFFF8FAFC),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
+      enabledBorder: border(_border),
+      disabledBorder: border(_border),
+      focusedBorder: border(_primary, 1.5),
+      errorBorder: border(const Color(0xFFDC2626)),
+      focusedErrorBorder: border(const Color(0xFFDC2626), 1.5),
+      errorStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+    );
+  }
+}
+
+class _FieldLabel extends StatelessWidget {
+  final String text;
+
+  const _FieldLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        color: _ink,
+        fontSize: 14,
+        fontWeight: FontWeight.w800,
       ),
     );
   }

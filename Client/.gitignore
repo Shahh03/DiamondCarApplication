@@ -73,6 +73,8 @@ ios/DerivedData/
 ios/.flutter-plugins
 ios/.flutter-plugins-dependencies
 
+.env
+stripe.env.json
 # macOS
 macos/Flutter/ephemeral/
 macos/Flutter/.last_build_id

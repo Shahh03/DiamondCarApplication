@@ -8,6 +8,7 @@ import '../../api/renter_api.dart';
 import 'Settings/settings.dart';
 import 'currencySelector.dart';
 import 'editProfile.dart';
+import 'paymentMethods.dart';
 import 'wishlist/myWishlist.dart';
 
 class RenterProfile extends StatefulWidget {
@@ -438,6 +439,22 @@ class _RenterProfileState extends State<RenterProfile> {
                               context,
                               MaterialPageRoute(
                                 builder: (_) => WishlistPage(renterId: _userId),
+                              ),
+                            );
+                          },
+                        ),
+                        const _MenuDivider(),
+                        _AccountMenuTile(
+                          icon: Icons.credit_card_rounded,
+                          title: 'Payment methods',
+                          subtitle: 'Add, remove or choose a default card',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => PaymentMethodsPage(
+                                  renterId: _userId,
+                                ),
                               ),
                             );
                           },
