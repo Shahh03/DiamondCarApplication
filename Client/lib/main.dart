@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 
+import 'authentication/auth_gate.dart';
 import 'authentication/login.dart';
 import 'authentication/signup.dart';
 import 'authentication/welcome.dart';
@@ -10,11 +11,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await dotenv.load(fileName: '.env');
-
   Stripe.publishableKey = dotenv.env['STRIPE_PUBLISHABLE_KEY'] ?? '';
   Stripe.merchantIdentifier = 'merchant.com.diamondcar';
   Stripe.urlScheme = 'diamondcar';
-
   await Stripe.instance.applySettings();
 
   runApp(const MyApp());
@@ -36,7 +35,8 @@ class MyApp extends StatelessWidget {
       ),
       initialRoute: '/',
       routes: {
-        '/': (_) => const WelcomePage(),
+        '/': (_) => const AuthGate(),
+        '/welcome': (_) => const WelcomePage(),
         '/signup': (_) => const SignupPage(),
         '/login': (_) => const LoginPage(),
       },

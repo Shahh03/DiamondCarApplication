@@ -18,8 +18,15 @@ const _border = Color(0xFFE2E8F0);
 
 class RenterSearch extends StatefulWidget {
   final String id;
+  final String? initialCategory;
+  final String? initialFuelType;
 
-  const RenterSearch({super.key, required this.id});
+  const RenterSearch({
+    super.key,
+    required this.id,
+    this.initialCategory,
+    this.initialFuelType,
+  });
 
   @override
   State<RenterSearch> createState() => _RenterSearchState();
@@ -33,6 +40,7 @@ class _RenterSearchState extends State<RenterSearch> {
   Map<String, dynamic>? _userData;
   List<dynamic> _carVariants = [];
   bool _isLoading = true;
+  bool _didApplyInitialFilters = false;
   String? _errorMessage;
   String _query = '';
 
@@ -89,8 +97,13 @@ class _RenterSearchState extends State<RenterSearch> {
           ? List<dynamic>.from(results[1] as List)
           : <dynamic>[];
       _deriveFilterOptions();
+      _applyInitialFilters();
 
       setState(() => _isLoading = false);
+
+      if (_selectedCategory != null || _selectedFuel != null) {
+        unawaited(_trackFilterActivity(_currentFilters));
+      }
     } catch (error) {
       debugPrint('Search page load error: $error');
       if (!mounted) return;
@@ -166,6 +179,41 @@ class _RenterSearchState extends State<RenterSearch> {
     _priceMax = maximumPrice ?? 0;
     _yearMin = (minimumYear ?? 0).toDouble();
     _yearMax = (maximumYear ?? 0).toDouble();
+  }
+
+  String? _initialValue(String? value) {
+    final cleaned = value?.trim();
+    return cleaned == null || cleaned.isEmpty ? null : cleaned;
+  }
+
+  String _matchOrAddOption(List<String> options, String requested) {
+    for (final option in options) {
+      if (option.toLowerCase() == requested.toLowerCase()) return option;
+    }
+
+    options
+      ..add(requested)
+      ..sort();
+    return requested;
+  }
+
+  void _applyInitialFilters() {
+    if (_didApplyInitialFilters) return;
+    _didApplyInitialFilters = true;
+
+    final initialCategory = _initialValue(widget.initialCategory);
+    final initialFuel = _initialValue(widget.initialFuelType);
+
+    if (initialCategory != null) {
+      _selectedCategory = _matchOrAddOption(
+        _categories,
+        initialCategory,
+      );
+    }
+
+    if (initialFuel != null) {
+      _selectedFuel = _matchOrAddOption(_fuels, initialFuel);
+    }
   }
 
   String get _preferredCurrency {

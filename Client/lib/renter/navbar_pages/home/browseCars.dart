@@ -15,45 +15,76 @@ class BrowseCars extends StatelessWidget {
   static const List<_CarCategory> _categories = [
     _CarCategory(
       title: 'Sedan',
-      image: 'assets/images/sedan.png',
+      image: 'assets/images/cars/sedan.webp',
       tint: Color(0xFFEFF6FF),
+      category: 'Sedan',
     ),
     _CarCategory(
       title: 'SUV',
-      image: 'assets/images/suv.png',
+      image: 'assets/images/cars/suv.webp',
       tint: Color(0xFFECFDF5),
+      category: 'SUV',
+    ),
+    _CarCategory(
+      title: 'Hatchback',
+      image: 'assets/images/cars/hatchback.webp',
+      tint: Color(0xFFFFF7ED),
+      category: 'Hatchback',
     ),
     _CarCategory(
       title: 'Luxury',
-      image: 'assets/images/luxury.png',
+      image: 'assets/images/cars/luxury.webp',
       tint: Color(0xFFF5F3FF),
+      category: 'Luxury',
     ),
     _CarCategory(
       title: 'Compact',
-      image: 'assets/images/compact.png',
-      tint: Color(0xFFFFF7ED),
-    ),
-    _CarCategory(
-      title: 'Electric',
-      image: 'assets/images/electric.png',
-      tint: Color(0xFFF0FDFA),
+      image: 'assets/images/cars/compact.webp',
+      tint: Color(0xFFFEFCE8),
+      category: 'Compact',
     ),
     _CarCategory(
       title: 'Convertible',
-      image: 'assets/images/convertible.png',
+      image: 'assets/images/cars/convertible.webp',
       tint: Color(0xFFFDF2F8),
+      category: 'Convertible',
     ),
     _CarCategory(
       title: 'Sports',
-      image: 'assets/images/sports.png',
+      image: 'assets/images/cars/sports.webp',
       tint: Color(0xFFFEF2F2),
+      category: 'Sports',
+    ),
+    _CarCategory(
+      title: 'Electric',
+      image: 'assets/images/cars/electric.webp',
+      tint: Color(0xFFF0FDFA),
+      fuelType: 'Electric',
+    ),
+    _CarCategory(
+      title: 'Van',
+      image: 'assets/images/cars/van.webp',
+      tint: Color(0xFFF8FAFC),
+      category: 'Van',
+    ),
+    _CarCategory(
+      title: 'Truck',
+      image: 'assets/images/cars/truck.webp',
+      tint: Color(0xFFFFF7ED),
+      category: 'Truck',
     ),
   ];
 
-  void _openSearch(BuildContext context) {
+  void _openSearch(BuildContext context, _CarCategory selection) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => RenterSearch(id: renterId)),
+      MaterialPageRoute(
+        builder: (_) => RenterSearch(
+          id: renterId,
+          initialCategory: selection.category,
+          initialFuelType: selection.fuelType,
+        ),
+      ),
     );
   }
 
@@ -75,9 +106,10 @@ class BrowseCars extends StatelessWidget {
             childAspectRatio: columns == 3 ? 1.12 : 1.02,
           ),
           itemBuilder: (context, index) {
+            final category = _categories[index];
             return _CategoryCard(
-              category: _categories[index],
-              onTap: () => _openSearch(context),
+              category: category,
+              onTap: () => _openSearch(context, category),
             );
           },
         );
@@ -90,11 +122,15 @@ class _CarCategory {
   final String title;
   final String image;
   final Color tint;
+  final String? category;
+  final String? fuelType;
 
   const _CarCategory({
     required this.title,
     required this.image,
     required this.tint,
+    this.category,
+    this.fuelType,
   });
 }
 
@@ -128,7 +164,7 @@ class _CategoryCard extends StatelessWidget {
                 child: Container(
                   width: double.infinity,
                   margin: const EdgeInsets.all(8),
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
                     color: category.tint,
                     borderRadius: BorderRadius.circular(15),
@@ -136,6 +172,7 @@ class _CategoryCard extends StatelessWidget {
                   child: Image.asset(
                     category.image,
                     fit: BoxFit.contain,
+                    filterQuality: FilterQuality.medium,
                     errorBuilder: (_, __, ___) => const Icon(
                       Icons.directions_car_filled_outlined,
                       size: 48,

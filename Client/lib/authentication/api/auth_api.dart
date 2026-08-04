@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 import 'api_config.dart';
+
 class AuthApiException implements Exception {
   final String message;
   final int? statusCode;
@@ -16,59 +18,136 @@ class AuthApiException implements Exception {
 
 class AuthApi {
   static const Duration _timeout = Duration(seconds: 15);
+  static const FlutterSecureStorage _storage = FlutterSecureStorage();
+
+  static const _accessTokenKey = 'auth_access_token';
+  static const _refreshTokenKey = 'auth_refresh_token';
+  static const _userIdKey = 'auth_user_id';
+  static const _userTypeKey = 'auth_user_type';
 
   static Future<Map<String, dynamic>> login({
     required String identifier,
     required String password,
   }) async {
-    final url = Uri.parse('${ApiConfig.baseUrl}/user/login');
+    final response = await _post(
+      '/user/login',
+      {
+        'identifier': identifier.trim(),
+        'password': password,
+      },
+    );
+
+    final data = _successfulMap(response, 'Login failed.');
+    final user = _readSessionResponse(data);
+    await _storeSession(data, user);
+    return user;
+  }
+
+  static Future<Map<String, dynamic>?> restoreSession() async {
+    final refreshToken = await _storage.read(key: _refreshTokenKey);
+    if (refreshToken == null || refreshToken.isEmpty) return null;
 
     try {
-      final response = await http
+      final response = await _post(
+        '/user/refresh',
+        {'refreshToken': refreshToken},
+      );
+      final data = _successfulMap(response, 'Could not restore session.');
+      final user = _readSessionResponse(data);
+      await _storeSession(data, user);
+      return user;
+    } catch (_) {
+      await clearLocalSession();
+      return null;
+    }
+  }
+
+  static Future<void> logout() async {
+    final refreshToken = await _storage.read(key: _refreshTokenKey);
+
+    try {
+      if (refreshToken != null && refreshToken.isNotEmpty) {
+        await _post('/user/logout', {'refreshToken': refreshToken});
+      }
+    } catch (_) {
+      // Local logout must still succeed if the device is offline.
+    } finally {
+      await clearLocalSession();
+    }
+  }
+
+  static Future<void> clearLocalSession() async {
+    await Future.wait([
+      _storage.delete(key: _accessTokenKey),
+      _storage.delete(key: _refreshTokenKey),
+      _storage.delete(key: _userIdKey),
+      _storage.delete(key: _userTypeKey),
+    ]);
+  }
+
+  static Future<String?> getAccessToken() =>
+      _storage.read(key: _accessTokenKey);
+
+  static Future<Map<String, String>> authorizedHeaders() async {
+    final token = await getAccessToken();
+    return {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+    };
+  }
+
+  static Future<String> signup({
+    required String username,
+    required String email,
+    required String password,
+    required String name,
+    required String phoneNumber,
+    required DateTime birthDate,
+    required String gender,
+    required String nationality,
+    required String idCardNumber,
+    required String drivingLicenseNumber,
+    required String occupation,
+    required String location,
+    required bool hasAcceptedTerms,
+  }) async {
+    final response = await _post('/user/create', {
+      'username': username.trim(),
+      'email': email.trim().toLowerCase(),
+      'password': password,
+      'type': 'Renter',
+      'hasAcceptedTerms': hasAcceptedTerms,
+      'name': name.trim(),
+      'phoneNumber': phoneNumber.trim(),
+      'birthDate': birthDate.toIso8601String(),
+      'gender': gender,
+      'nationality': nationality,
+      'idCardNumber': idCardNumber.trim(),
+      'drivingLicenseNumber': drivingLicenseNumber.trim(),
+      'occupation': occupation.trim(),
+      'location': location.trim(),
+    });
+
+    final data = _successfulMap(response, 'Could not create your account.');
+    return data['message']?.toString() ?? 'Account created successfully.';
+  }
+
+  static Future<http.Response> _post(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      return await http
           .post(
-            url,
+            Uri.parse('${ApiConfig.baseUrl}$path'),
             headers: const {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
             },
-            body: jsonEncode({
-              'identifier': identifier.trim(),
-              'password': password,
-            }),
+            body: jsonEncode(body),
           )
           .timeout(_timeout);
-
-      final Map<String, dynamic>? data = _decodeResponse(response.body);
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final rawUser = data?['user'];
-
-        if (rawUser is! Map) {
-          throw const AuthApiException(
-            'The server returned invalid account information.',
-          );
-        }
-
-        final user = Map<String, dynamic>.from(rawUser);
-        final id = user['_id']?.toString() ?? '';
-        final type = user['type']?.toString() ?? '';
-
-        if (id.isEmpty || type.isEmpty) {
-          throw const AuthApiException(
-            'The server returned incomplete account information.',
-          );
-        }
-
-        return user;
-      }
-
-      final serverMessage = data?['message']?.toString().trim();
-      throw AuthApiException(
-        serverMessage?.isNotEmpty == true
-            ? serverMessage!
-            : 'Login failed. Please check your details and try again.',
-        statusCode: response.statusCode,
-      );
     } on TimeoutException {
       throw const AuthApiException(
         'The server took too long to respond. Please try again.',
@@ -82,82 +161,63 @@ class AuthApi {
     }
   }
 
+  static Map<String, dynamic> _successfulMap(
+    http.Response response,
+    String fallback,
+  ) {
+    final data = _decodeResponse(response.body) ?? <String, dynamic>{};
+    if (response.statusCode >= 200 && response.statusCode < 300) return data;
 
-  static Future<String> signup({
-  required String username,
-  required String email,
-  required String password,
-  required String name,
-  required String phoneNumber,
-  required DateTime birthDate,
-  required String gender,
-  required String nationality,
-  required String idCardNumber,
-  required String drivingLicenseNumber,
-  required String occupation,
-  required String location,
-  required bool hasAcceptedTerms,
-}) async {
-  final url = Uri.parse('${ApiConfig.baseUrl}/user/create');
-
-  try {
-    final response = await http
-        .post(
-          url,
-          headers: const {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: jsonEncode({
-            'username': username.trim(),
-            'email': email.trim().toLowerCase(),
-            'password': password,
-            'type': 'Renter',
-            'hasAcceptedTerms': hasAcceptedTerms,
-            'name': name.trim(),
-            'phoneNumber': phoneNumber.trim(),
-            'birthDate': birthDate.toIso8601String(),
-            'gender': gender,
-            'nationality': nationality,
-            'idCardNumber': idCardNumber.trim(),
-            'drivingLicenseNumber': drivingLicenseNumber.trim(),
-            'occupation': occupation.trim(),
-            'location': location.trim(),
-          }),
-        )
-        .timeout(_timeout);
-
-    final data = _decodeResponse(response.body);
-
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      return data?['message']?.toString() ??
-          'Account created successfully.';
-    }
-
-    final serverMessage = data?['message']?.toString().trim();
-
+    final message = data['message']?.toString().trim();
     throw AuthApiException(
-      serverMessage?.isNotEmpty == true
-          ? serverMessage!
-          : 'Could not create your account. Please try again.',
+      message?.isNotEmpty == true ? message! : fallback,
       statusCode: response.statusCode,
     );
-  } on TimeoutException {
-    throw const AuthApiException(
-      'The server took too long to respond. Please try again.',
-    );
-  } on AuthApiException {
-    rethrow;
-  } catch (_) {
-    throw const AuthApiException(
-      'Could not connect to the server. Check your connection and try again.',
-    );
   }
-}
+
+  static Map<String, dynamic> _readSessionResponse(
+    Map<String, dynamic> data,
+  ) {
+    final rawUser = data['user'];
+    final accessToken = data['accessToken']?.toString() ?? '';
+    final refreshToken = data['refreshToken']?.toString() ?? '';
+
+    if (rawUser is! Map || accessToken.isEmpty || refreshToken.isEmpty) {
+      throw const AuthApiException(
+        'The server returned incomplete session information.',
+      );
+    }
+
+    final user = Map<String, dynamic>.from(rawUser);
+    if ((user['_id']?.toString() ?? '').isEmpty ||
+        (user['type']?.toString() ?? '').isEmpty) {
+      throw const AuthApiException(
+        'The server returned incomplete account information.',
+      );
+    }
+    return user;
+  }
+
+  static Future<void> _storeSession(
+    Map<String, dynamic> data,
+    Map<String, dynamic> user,
+  ) async {
+    await Future.wait([
+      _storage.write(
+        key: _accessTokenKey,
+        value: data['accessToken'].toString(),
+      ),
+      _storage.write(
+        key: _refreshTokenKey,
+        value: data['refreshToken'].toString(),
+      ),
+      _storage.write(key: _userIdKey, value: user['_id'].toString()),
+      _storage.write(key: _userTypeKey, value: user['type'].toString()),
+    ]);
+  }
 
   static Map<String, dynamic>? _decodeResponse(String body) {
     if (body.trim().isEmpty) return null;
-
     try {
       final decoded = jsonDecode(body);
       return decoded is Map ? Map<String, dynamic>.from(decoded) : null;

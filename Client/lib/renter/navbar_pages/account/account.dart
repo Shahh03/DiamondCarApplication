@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:project/renter/navbar_pages/bottom_nav_bar.dart';
 
+import '../../../authentication/logout_helper.dart';
 import '../../api/renter_api.dart';
 import 'Settings/settings.dart';
 import 'currencySelector.dart';
@@ -241,16 +242,19 @@ class _RenterProfileState extends State<RenterProfile> {
   }
 
   Future<void> logOut() async {
-    try {
-      if (!mounted) return;
-      Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
-    } catch (error) {
-      debugPrint('Error logging out: $error');
-      if (mounted) {
-        _showMessage('Could not log out. Please try again.', isError: true);
-      }
+  try {
+    await logoutAndReturnToWelcome(context);
+  } catch (error) {
+    debugPrint('Error logging out: $error');
+
+    if (mounted) {
+      _showMessage(
+        'Could not log out. Please try again.',
+        isError: true,
+      );
     }
   }
+}
 
   Future<void> showLogOutDialog() async {
     final shouldLogOut = await showDialog<bool>(
