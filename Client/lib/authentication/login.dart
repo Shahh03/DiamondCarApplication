@@ -150,6 +150,9 @@ class _LoginPageState extends State<LoginPage> {
                           });
                         },
                         onSubmit: _submitLogin,
+                        onForgotPassword: () {
+                          Navigator.pushNamed(context, '/forgot-password');
+                        },
                         onSignUp: () {
                           Navigator.pushNamed(context, '/signup');
                         },
@@ -267,6 +270,7 @@ class _LoginCard extends StatelessWidget {
   final bool isLoading;
   final VoidCallback onTogglePassword;
   final VoidCallback onSubmit;
+  final VoidCallback onForgotPassword;
   final VoidCallback onSignUp;
 
   const _LoginCard({
@@ -277,6 +281,7 @@ class _LoginCard extends StatelessWidget {
     required this.isLoading,
     required this.onTogglePassword,
     required this.onSubmit,
+    required this.onForgotPassword,
     required this.onSignUp,
   });
 
@@ -371,7 +376,28 @@ class _LoginCard extends StatelessWidget {
                   return null;
                 },
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: isLoading ? null : onForgotPassword,
+                  style: TextButton.styleFrom(
+                    foregroundColor: _primary,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 8,
+                    ),
+                  ),
+                  child: const Text(
+                    'Forgot password?',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
               SizedBox(
                 width: double.infinity,
                 height: 54,

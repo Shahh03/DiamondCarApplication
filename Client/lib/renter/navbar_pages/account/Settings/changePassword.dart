@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../api/renter_api.dart';
-import '../account.dart';
 
 const _primary = Color(0xFF1D4ED8);
 const _primaryDark = Color(0xFF1E40AF);
@@ -99,85 +98,84 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     }
   }
 
-  Future<void> _showSuccessDialog() async {
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        contentPadding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: const BoxDecoration(
-                color: Color(0xFFDCFCE7),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.check_rounded,
-                color: Color(0xFF15803D),
-                size: 38,
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Password updated',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _ink,
-                fontSize: 21,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.25,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Your new password is active and your account is secure.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _muted,
-                fontSize: 13,
-                height: 1.45,
-              ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: FilledButton(
-                onPressed: () {
-                  Navigator.pop(dialogContext);
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => RenterProfile(id: widget.userId),
-                    ),
-                  );
-                },
-                style: FilledButton.styleFrom(
-                  backgroundColor: _primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                child: const Text(
-                  'Back to my account',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
-              ),
-            ),
-          ],
-        ),
+Future<void> _showSuccessDialog() async {
+  await showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) => AlertDialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
       ),
-    );
-  }
-
+      contentPadding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: const BoxDecoration(
+              color: Color(0xFFDCFCE7),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.check_rounded,
+              color: Color(0xFF15803D),
+              size: 38,
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Password updated',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _ink,
+              fontSize: 21,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.25,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Your password was changed successfully. For your security, '
+            'please sign in again using your new password.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _muted,
+              fontSize: 13,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: FilledButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pushNamedAndRemoveUntil(
+                  '/login',
+                  (route) => false,
+                );
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: _primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: const Text(
+                'Sign in again',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
   String? _requiredPassword(String? value, String message) {
     if (value == null || value.trim().isEmpty) return message;
     return null;

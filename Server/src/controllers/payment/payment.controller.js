@@ -104,9 +104,24 @@ const createMobileCustomerSession = (stripe, customerId) =>
       mobile_payment_element: {
         enabled: true,
         features: {
-          payment_method_save: "enabled",
+          // The app already has its own "Save a new card" checkbox.
+          payment_method_save: "disabled",
+
+          // Cards saved after explicit consent can be displayed again.
+          payment_method_save_allow_redisplay_override: "always",
+
+          // Allow the renter to select previously saved cards.
           payment_method_redisplay: "enabled",
-          payment_method_remove: "enabled",
+
+          // Include older cards whose allow_redisplay was not previously set.
+          payment_method_allow_redisplay_filters: [
+            "always",
+            "limited",
+            "unspecified",
+          ],
+
+          // Removal is handled safely from your Payment Methods page.
+          payment_method_remove: "disabled",
         },
       },
     },
@@ -188,7 +203,7 @@ export const createStripePaymentIntent = async (req, res) => {
         customer: customer.id,
         payment_method_types: ["card"],
         ...(savePaymentMethod === true && {
-          setup_future_usage: "off_session",
+          setup_future_usage: "on_session",
         }),
         description: `DiamondCar rental ${checkoutReference}`,
         metadata: {
@@ -260,6 +275,16 @@ export const getStripePaymentStatus = async (req, res) => {
       stripeClient().paymentIntents.retrieve(paymentIntentId),
       Payment.findOne({ stripePaymentIntentId: paymentIntentId }),
     ]);
+
+    // The Payment document is created by the webhook, so it may not exist yet
+    // when Flutter starts polling. Stripe metadata is therefore the reliable
+    // ownership source during this short interval.
+    if (
+      req.auth?.type !== "Admin" &&
+      intent.metadata?.renterId !== req.auth?.userId
+    ) {
+      return res.status(404).json({ message: "Payment intent not found" });
+    }
 
     const booking = payment
       ? await Booking.findOne({ payment: payment._id }).select("_id status")
@@ -616,7 +641,7 @@ export const createCardSetupIntent = async (req, res) => {
       stripe.setupIntents.create({
         customer: customer.id,
         payment_method_types: ["card"],
-        usage: "off_session",
+        usage: "on_session",
         metadata: { renterId: renter._id.toString() },
       }),
       createMobileCustomerSession(stripe, customer.id),

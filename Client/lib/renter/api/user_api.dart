@@ -1,23 +1,24 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'api_config.dart';
+
+import '../../core/network/authenticated_client.dart';
 
 class UserApi {
-  static Future<Map<String, dynamic>> getUserById(String userId) async {
-    final url = Uri.parse('${ApiConfig.baseUrl}/user/$userId');
+  static Future<Map<String, dynamic>> getUserById(String _userId) async {
+    // Identity comes from the access token; callers can no longer request an
+    // arbitrary user's account by changing a URL parameter.
+    final response = await AuthenticatedClient.get('/user/session');
+    final decoded = response.body.trim().isEmpty
+        ? null
+        : jsonDecode(response.body);
 
-    final response = await http.get(url);
-
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      final data = jsonDecode(response.body);
-
-      if (data is Map<String, dynamic>) {
-        return data;
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (decoded is Map && decoded['user'] is Map) {
+        return Map<String, dynamic>.from(decoded['user'] as Map);
       }
-
       throw Exception('Invalid user data format');
     }
 
-    throw Exception('Failed to load user (${response.statusCode})');
+    final message = decoded is Map ? decoded['message']?.toString() : null;
+    throw Exception(message ?? 'Failed to load account.');
   }
 }

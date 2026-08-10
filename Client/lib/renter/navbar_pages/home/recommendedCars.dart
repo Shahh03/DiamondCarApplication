@@ -22,10 +22,10 @@ class RecommendedCars extends StatefulWidget {
   });
 
   @override
-  State<RecommendedCars> createState() => _RecommendedCarsState();
+  State<RecommendedCars> createState() => RecommendedCarsState();
 }
 
-class _RecommendedCarsState extends State<RecommendedCars> {
+class RecommendedCarsState extends State<RecommendedCars> {
   static const _baseCurrency = 'AED';
 
   List<dynamic> _recommendations = [];
@@ -37,6 +37,8 @@ class _RecommendedCarsState extends State<RecommendedCars> {
     super.initState();
     _loadRecommendations();
   }
+
+  Future<void> refresh() => _loadRecommendations();
 
   Future<void> _loadRecommendations() async {
     if (mounted) {

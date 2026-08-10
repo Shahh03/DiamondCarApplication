@@ -32,6 +32,12 @@ const cleanSearchData = (value) => {
   return Object.keys(cleaned).length > 0 ? cleaned : null;
 };
 
+const requestedLimit = (rawValue, fallback = 10) => {
+  const parsed = Number.parseInt(rawValue, 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(parsed, 1), 20);
+};
+
 export const trackUserActivity = async (req, res) => {
   try {
     const { renterId, eventType, carVariantId } = req.body;
@@ -64,8 +70,8 @@ export const trackUserActivity = async (req, res) => {
         return res.status(404).json({ message: "Car variant not found" });
       }
 
-      // One view per car every ten minutes prevents repeated rebuilds or taps
-      // from artificially dominating the recommendation history.
+      // Refreshing one recent record prevents rebuilds and repeated taps from
+      // artificially dominating both recommendations and recent history.
       const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
       const recentView = await UserActivity.findOneAndUpdate(
         {
@@ -105,7 +111,93 @@ export const trackUserActivity = async (req, res) => {
     console.error("Track user activity error:", error);
     return res.status(500).json({
       message: "Failed to record activity",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
+    });
+  }
+};
+
+export const getRecentlyViewedCarVariants = async (req, res) => {
+  try {
+    const { renterId } = req.params;
+
+    if (!mongoose.isValidObjectId(renterId)) {
+      return res.status(400).json({ message: "Invalid renter ID" });
+    }
+
+    const renterExists = await Renter.exists({ _id: renterId });
+    if (!renterExists) {
+      return res.status(404).json({ message: "Renter not found" });
+    }
+
+    const limit = requestedLimit(req.query.limit);
+
+    // Read extra history so duplicates and cars that became unavailable do
+    // not leave the response needlessly short.
+    const activities = await UserActivity.find({
+      renter: renterId,
+      eventType: "view",
+      carVariant: { $ne: null },
+    })
+      .sort({ createdAt: -1 })
+      .limit(Math.min(limit * 10, 200))
+      .select("carVariant createdAt")
+      .lean();
+
+    const orderedIds = [];
+    const viewedAtById = new Map();
+
+    for (const activity of activities) {
+      const id = activity.carVariant?.toString();
+      if (!id || viewedAtById.has(id)) continue;
+
+      orderedIds.push(id);
+      viewedAtById.set(id, activity.createdAt);
+      if (orderedIds.length >= Math.min(limit * 5, 100)) break;
+    }
+
+    if (orderedIds.length === 0) {
+      return res.status(200).json({ data: [] });
+    }
+
+    const variants = await CarVariant.find({
+      _id: { $in: orderedIds },
+      isAvailable: true,
+    })
+      .select(
+        "provider car color rentalPricePerDay depositAmount isAvailable images createdAt updatedAt"
+      )
+      .populate({
+        path: "car",
+        select: "brand model year category transmission fuelType seats features",
+      })
+      .populate({
+        path: "provider",
+        select: "companyName address.city address.country profilePicture",
+      })
+      .lean();
+
+    const variantById = new Map(
+      variants.map((variant) => [variant._id.toString(), variant])
+    );
+
+    const data = orderedIds
+      .map((id) => {
+        const variant = variantById.get(id);
+        if (!variant) return null;
+        return {
+          ...variant,
+          viewedAt: viewedAtById.get(id),
+        };
+      })
+      .filter(Boolean)
+      .slice(0, limit);
+
+    return res.status(200).json({ data });
+  } catch (error) {
+    console.error("Get recently viewed cars error:", error);
+    return res.status(500).json({
+      message: "Failed to load recently viewed cars",
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };

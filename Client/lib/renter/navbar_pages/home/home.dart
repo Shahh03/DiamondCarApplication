@@ -6,6 +6,7 @@ import '../account/account.dart';
 import '../myRentals/myRentals.dart';
 import '../search/search.dart';
 import 'browseCars.dart';
+import 'recentlyViewedCars.dart';
 import 'recommendedCars.dart';
 import 'upcomingRentals.dart';
 
@@ -26,6 +27,10 @@ class RenterHome extends StatefulWidget {
 }
 
 class _RenterHomeState extends State<RenterHome> {
+  final _upcomingKey = GlobalKey<UpcomingRentalsState>();
+  final _recommendedKey = GlobalKey<RecommendedCarsState>();
+  final _recentlyViewedKey = GlobalKey<RecentlyViewedCarsState>();
+
   Map<String, dynamic>? _userData;
   bool _isLoading = true;
   String? _errorMessage;
@@ -36,12 +41,14 @@ class _RenterHomeState extends State<RenterHome> {
     _loadUser();
   }
 
-  Future<void> _loadUser() async {
-    if (mounted) {
+  Future<void> _loadUser({bool showLoading = true}) async {
+    if (mounted && showLoading) {
       setState(() {
         _isLoading = true;
         _errorMessage = null;
       });
+    } else if (mounted) {
+      setState(() => _errorMessage = null);
     }
 
     try {
@@ -61,6 +68,22 @@ class _RenterHomeState extends State<RenterHome> {
         _errorMessage = 'We could not load your account. Please try again.';
       });
     }
+  }
+
+  Future<void> _refreshHome() async {
+    final tasks = <Future<void>>[
+      _loadUser(showLoading: false),
+    ];
+
+    final upcoming = _upcomingKey.currentState;
+    final recommended = _recommendedKey.currentState;
+    final recentlyViewed = _recentlyViewedKey.currentState;
+
+    if (upcoming != null) tasks.add(upcoming.refresh());
+    if (recommended != null) tasks.add(recommended.refresh());
+    if (recentlyViewed != null) tasks.add(recentlyViewed.refresh());
+
+    await Future.wait(tasks);
   }
 
   String get _name {
@@ -169,7 +192,7 @@ class _RenterHomeState extends State<RenterHome> {
       ),
       body: RefreshIndicator(
         color: _primary,
-        onRefresh: _loadUser,
+        onRefresh: _refreshHome,
         child: _buildBody(),
       ),
       bottomNavigationBar: BottomNavBar(
@@ -181,24 +204,6 @@ class _RenterHomeState extends State<RenterHome> {
 
   Widget _buildBody() {
     if (_isLoading) return const _HomeLoading();
-
-    if (_errorMessage != null) {
-      return ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
-        children: [
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 760),
-              child: _HomeError(
-                message: _errorMessage!,
-                onRetry: _loadUser,
-              ),
-            ),
-          ),
-        ],
-      );
-    }
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -224,6 +229,13 @@ class _RenterHomeState extends State<RenterHome> {
                       name: _firstName,
                       onSearch: _openSearch,
                     ),
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 14),
+                      _HomeError(
+                        message: _errorMessage!,
+                        onRetry: () => _loadUser(showLoading: false),
+                      ),
+                    ],
                     const SizedBox(height: 25),
                     _SectionHeader(
                       title: 'Upcoming rentals',
@@ -232,7 +244,10 @@ class _RenterHomeState extends State<RenterHome> {
                       onAction: _openRentals,
                     ),
                     const SizedBox(height: 12),
-                    UpcomingRentals(renterId: widget.renterId),
+                    UpcomingRentals(
+                      key: _upcomingKey,
+                      renterId: widget.renterId,
+                    ),
                     const SizedBox(height: 26),
                     _SectionHeader(
                       title: 'Recommended for you',
@@ -242,11 +257,18 @@ class _RenterHomeState extends State<RenterHome> {
                     ),
                     const SizedBox(height: 12),
                     RecommendedCars(
+                      key: _recommendedKey,
                       renterId: widget.renterId,
                       currency: _currency,
                       fxRates: _fxRates,
                     ),
                     const SizedBox(height: 26),
+                    RecentlyViewedCars(
+                      key: _recentlyViewedKey,
+                      renterId: widget.renterId,
+                      currency: _currency,
+                      fxRates: _fxRates,
+                    ),
                     _SectionHeader(
                       title: 'Browse by type',
                       subtitle: 'Find a car that fits your journey',
@@ -478,7 +500,7 @@ class _HomeError extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           const Text(
-            'Unable to load home',
+            'Account details unavailable',
             style: TextStyle(
               color: _ink,
               fontSize: 18,

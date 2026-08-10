@@ -14,6 +14,8 @@ const _muted = Color(0xFF64748B);
 const _border = Color(0xFFE2E8F0);
 const _success = Color(0xFF047857);
 const _danger = Color(0xFFDC2626);
+const _softBlue = Color(0xFFEFF6FF);
+const _softGreen = Color(0xFFECFDF5);
 
 class BookingCheckoutPage extends StatefulWidget {
   final String renterId;
@@ -84,10 +86,6 @@ class _BookingCheckoutPageState extends State<BookingCheckoutPage> {
   int get _days => _dates == null ? 0 : _dates!.duration.inDays;
   num get _rentalSubtotal => _dailyRate * _days;
   num get _totalDue => _rentalSubtotal + _deposit;
-
-  bool get _isAndroid =>
-      Theme.of(context).platform == TargetPlatform.android;
-  bool get _isIOS => Theme.of(context).platform == TargetPlatform.iOS;
 
   String _money(num amount) =>
       'AED ${NumberFormat.decimalPattern().format(amount)}';
@@ -244,110 +242,126 @@ class _BookingCheckoutPageState extends State<BookingCheckoutPage> {
   }
 
   Future<void> _confirmBooking() async {
-    if (_dates == null) {
-      await _selectDates();
+  if (_isSubmitting) return;
+
+  if (_dates == null) {
+    await _selectDates();
+    return;
+  }
+
+  final available = await _checkAvailability();
+  if (!available || !mounted) return;
+
+  setState(() => _isSubmitting = true);
+
+  try {
+    final result = await BookingApi.createStripePaymentIntent(
+      renterId: widget.renterId,
+      carVariantId: _variantId,
+      startDate: _utcDay(_dates!.start),
+      endDate: _utcDay(_dates!.end),
+      savePaymentMethod: _saveCard,
+    );
+
+    if (!mounted) return;
+
+    final paymentIntentId =
+        result['paymentIntentId']?.toString() ?? '';
+
+    final clientSecret =
+        result['clientSecret']?.toString() ?? '';
+
+    final customerId =
+        result['customerId']?.toString() ?? '';
+
+    final customerSessionSecret =
+        result['customerSessionClientSecret']?.toString() ?? '';
+
+    if (paymentIntentId.isEmpty ||
+        clientSecret.isEmpty ||
+        customerId.isEmpty ||
+        customerSessionSecret.isEmpty) {
+      throw Exception(
+        'The server returned incomplete payment information.',
+      );
+    }
+
+    await Stripe.instance.initPaymentSheet(
+      paymentSheetParameters: SetupPaymentSheetParameters(
+        paymentIntentClientSecret: clientSecret,
+        customerId: customerId,
+        customerSessionClientSecret: customerSessionSecret,
+        merchantDisplayName: 'DiamondCar',
+        style: ThemeMode.system,
+        returnURL: 'diamondcar://stripe-redirect',
+      ),
+    );
+
+    await Stripe.instance.presentPaymentSheet();
+
+    if (!mounted) return;
+
+    final status = await _waitForPaymentConfirmation(
+      paymentIntentId,
+    );
+
+    if (!mounted) return;
+
+    if (status == null) {
+      _showMessage(
+        'Payment was received, but booking confirmation is still processing. '
+        'Check your bookings again shortly.',
+      );
       return;
     }
 
-    final available = await _checkAvailability();
-    if (!available || !mounted) return;
-
-    setState(() => _isSubmitting = true);
-
-    try {
-      final result = await BookingApi.createStripePaymentIntent(
-        renterId: widget.renterId,
-        carVariantId: _variantId,
-        startDate: _utcDay(_dates!.start),
-        endDate: _utcDay(_dates!.end),
-        savePaymentMethod: _saveCard,
+    if (status['refunded'] == true) {
+      throw Exception(
+        status['message']?.toString() ??
+            'The selected dates became unavailable and your payment '
+                'was refunded.',
       );
+    }
 
-      if (!mounted) return;
+    final bookingId = status['bookingId']?.toString() ?? '';
+    final confirmed = status['confirmed'] == true;
 
-      final paymentIntentId =
-          result['paymentIntentId']?.toString() ?? '';
-      final clientSecret = result['clientSecret']?.toString() ?? '';
-      final customerId = result['customerId']?.toString() ?? '';
-      final customerSessionSecret =
-          result['customerSessionClientSecret']?.toString() ?? '';
+    if (!confirmed || bookingId.isEmpty) {
+      final paymentStatus =
+          status['paymentStatus']?.toString().toLowerCase() ?? '';
 
-      if (paymentIntentId.isEmpty ||
-          clientSecret.isEmpty ||
-          customerId.isEmpty ||
-          customerSessionSecret.isEmpty) {
-        throw Exception(
-          'The server returned incomplete payment information.',
-        );
+      if (paymentStatus == 'failed' ||
+          paymentStatus == 'canceled' ||
+          paymentStatus == 'cancelled') {
+        throw Exception('The payment was not completed.');
       }
 
-      await Stripe.instance.initPaymentSheet(
-        paymentSheetParameters: SetupPaymentSheetParameters(
-          paymentIntentClientSecret: clientSecret,
-          customerId: customerId,
-          customerSessionClientSecret: customerSessionSecret,
-          merchantDisplayName: 'DiamondCar',
-          style: ThemeMode.system,
-          returnURL: 'diamondcar://stripe-redirect',
-          billingDetailsCollectionConfiguration:
-              const BillingDetailsCollectionConfiguration(
-            name: CollectionMode.never,
-            email: CollectionMode.never,
-            phone: CollectionMode.never,
-            address: AddressCollectionMode.never,
-          ),
-          googlePay: _isAndroid
-              ? const PaymentSheetGooglePay(
-                  merchantCountryCode: 'AE',
-                  currencyCode: 'AED',
-                  testEnv: true,
-                )
-              : null,
-          applePay: _isIOS
-              ? const PaymentSheetApplePay(
-                  merchantCountryCode: 'AE',
-                )
-              : null,
-        ),
+      throw Exception(
+        'The payment succeeded, but the booking could not be confirmed.',
       );
+    }
 
-      await Stripe.instance.presentPaymentSheet();
-      if (!mounted) return;
+    await _showSuccessDialog(bookingId);
+  } on StripeException catch (error) {
+    if (!mounted) return;
 
-      final status = await _waitForPaymentConfirmation(paymentIntentId);
-      if (!mounted) return;
+    final message = error.error.localizedMessage?.trim();
 
-      if (status == null) {
-        _showMessage(
-          'Payment was received. Booking confirmation is still processing.',
-        );
-        return;
-      }
+    if (message != null && message.isNotEmpty) {
+      _showMessage(message);
+    }
+  } catch (error) {
+    if (!mounted) return;
 
-      if (status['refunded'] == true) {
-        throw Exception(
-          status['message']?.toString() ??
-              'The dates became unavailable and your payment was refunded.',
-        );
-      }
-
-      final bookingId = status['bookingId']?.toString() ?? '';
-      if (status['confirmed'] != true || bookingId.isEmpty) {
-        throw Exception('The booking could not be confirmed.');
-      }
-
-      await _showSuccessDialog(bookingId);
-    } on StripeException catch (error) {
-      if (!mounted) return;
-      final message = error.error.localizedMessage?.trim();
-      if (message != null && message.isNotEmpty) _showMessage(message);
-    } catch (error) {
-      if (!mounted) return;
-      _showMessage(error.toString().replaceFirst('Exception: ', ''));
-    } finally {
-      if (mounted) setState(() => _isSubmitting = false);
+    _showMessage(
+      error.toString().replaceFirst('Exception: ', ''),
+    );
+  } finally {
+    if (mounted) {
+      setState(() => _isSubmitting = false);
     }
   }
+}
 
   Future<Map<String, dynamic>?> _waitForPaymentConfirmation(
     String paymentIntentId,
@@ -447,8 +461,10 @@ class _BookingCheckoutPageState extends State<BookingCheckoutPage> {
       backgroundColor: _background,
       appBar: AppBar(
         foregroundColor: Colors.white,
+        centerTitle: false,
+        elevation: 0,
         title: const Text(
-          'Complete booking',
+          'Review & pay',
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
         ),
         flexibleSpace: Container(
@@ -594,48 +610,52 @@ class _BookingCheckoutPageState extends State<BookingCheckoutPage> {
                   const SizedBox(height: 16),
                   _SectionCard(
                     icon: Icons.lock_outline_rounded,
-                    title: 'Secure payment',
+                    title: 'How would you like to pay?',
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              Icons.verified_user_outlined,
-                              color: _success,
-                              size: 22,
-                            ),
-                            SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Stripe will show saved cards, Link and any wallet supported by this device.',
-                                style: TextStyle(
-                                  color: _muted,
-                                  fontSize: 13,
-                                  height: 1.4,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
+                        const Text(
+                          'Your saved cards and the option to enter a new card '
+                          'will appear in the secure Stripe window.',
+                          style: TextStyle(
+                            color: _muted,
+                            fontSize: 13,
+                            height: 1.45,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const _PaymentChoice(
+                          icon: Icons.credit_card_rounded,
+                          title: 'Use a saved card',
+                          subtitle: 'Select any card already saved to your account.',
+                        ),
+                        const SizedBox(height: 10),
+                        const _PaymentChoice(
+                          icon: Icons.add_card_rounded,
+                          title: 'Use a new card once',
+                          subtitle: 'Leave the switch below off and the card will not be saved.',
                         ),
                         const SizedBox(height: 12),
-                        Container(
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: _border),
+                            color: _saveCard ? _softBlue : const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(17),
+                            border: Border.all(
+                              color: _saveCard ? _primary : _border,
+                              width: _saveCard ? 1.4 : 1,
+                            ),
                           ),
-                          child: CheckboxListTile(
+                          child: SwitchListTile.adaptive(
                             value: _saveCard,
                             contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 2,
+                              horizontal: 14,
+                              vertical: 4,
                             ),
-                            controlAffinity: ListTileControlAffinity.leading,
                             activeColor: _primary,
                             title: const Text(
-                              'Save a new card',
+                              'Save a new card after payment',
                               style: TextStyle(
                                 color: _ink,
                                 fontSize: 14,
@@ -643,11 +663,12 @@ class _BookingCheckoutPageState extends State<BookingCheckoutPage> {
                               ),
                             ),
                             subtitle: const Text(
-                              'Only save it when you want faster checkout next time.',
+                              'Turn this on only if you are entering a new card '
+                              'and want to reuse it later.',
                               style: TextStyle(
                                 color: _muted,
                                 fontSize: 12,
-                                height: 1.25,
+                                height: 1.35,
                               ),
                             ),
                             onChanged: _isSubmitting
@@ -657,6 +678,8 @@ class _BookingCheckoutPageState extends State<BookingCheckoutPage> {
                                     ),
                           ),
                         ),
+                        const SizedBox(height: 14),
+                        const _SecurePaymentNotice(),
                       ],
                     ),
                   ),
@@ -683,6 +706,29 @@ class _BookingCheckoutPageState extends State<BookingCheckoutPage> {
                           value: _money(_totalDue),
                           emphasized: true,
                         ),
+                        const SizedBox(height: 13),
+                        const Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline_rounded,
+                              color: _muted,
+                              size: 17,
+                            ),
+                            SizedBox(width: 7),
+                            Expanded(
+                              child: Text(
+                                'The deposit is included in today\'s total and '
+                                'is refundable according to the rental terms.',
+                                style: TextStyle(
+                                  color: _muted,
+                                  fontSize: 11.5,
+                                  height: 1.35,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -695,52 +741,213 @@ class _BookingCheckoutPageState extends State<BookingCheckoutPage> {
       bottomNavigationBar: SafeArea(
         top: false,
         child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-          decoration: const BoxDecoration(
+          padding: const EdgeInsets.fromLTRB(16, 11, 16, 14),
+          decoration: BoxDecoration(
             color: Colors.white,
-            border: Border(top: BorderSide(color: _border)),
-          ),
-          child: SizedBox(
-            height: 54,
-            child: FilledButton(
-              onPressed: _isSubmitting || _isChecking
-                  ? null
-                  : _confirmBooking,
-              style: FilledButton.styleFrom(
-                backgroundColor: _primary,
-                disabledBackgroundColor: _primary.withOpacity(0.55),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
+            border: const Border(top: BorderSide(color: _border)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 18,
+                offset: const Offset(0, -5),
               ),
-              child: _isSubmitting
-                  ? const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2.3,
-                          ),
-                        ),
-                        SizedBox(width: 11),
-                        Text('Opening secure checkout...'),
-                      ],
-                    )
-                  : Text(
-                      _days == 0
-                          ? 'Choose rental dates'
-                          : 'Continue • ${_money(_totalDue)}',
-                      style: const TextStyle(
-                        fontSize: 16,
+            ],
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                flex: 4,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'TOTAL DUE',
+                      style: TextStyle(
+                        color: _muted,
+                        fontSize: 10,
+                        letterSpacing: 0.7,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-            ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _money(_totalDue),
+                      style: const TextStyle(
+                        color: _ink,
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 6,
+                child: SizedBox(
+                  height: 56,
+                  child: FilledButton(
+                    onPressed: _isSubmitting || _isChecking
+                        ? null
+                        : _confirmBooking,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _primary,
+                      disabledBackgroundColor: _primary.withOpacity(0.55),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(17),
+                      ),
+                    ),
+                    child: _isSubmitting
+                        ? const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 19,
+                                height: 19,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2.3,
+                                ),
+                              ),
+                              SizedBox(width: 10),
+                              Flexible(
+                                child: Text(
+                                  'Opening checkout...',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                _days == 0
+                                    ? Icons.calendar_month_rounded
+                                    : Icons.lock_rounded,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  _days == 0
+                                      ? 'Choose dates'
+                                      : 'Continue to pay',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _PaymentChoice extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _PaymentChoice({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 39,
+            height: 39,
+            decoration: BoxDecoration(
+              color: _softBlue,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: _primary, size: 21),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: _ink,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: _muted,
+                    fontSize: 11.5,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SecurePaymentNotice extends StatelessWidget {
+  const _SecurePaymentNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      decoration: BoxDecoration(
+        color: _softGreen,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.verified_user_rounded, color: _success, size: 20),
+          SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              'Encrypted payment powered by Stripe. DiamondCar never stores '
+              'your full card number.',
+              style: TextStyle(
+                color: _success,
+                fontSize: 11.5,
+                height: 1.35,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

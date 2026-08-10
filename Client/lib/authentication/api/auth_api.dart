@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
-import 'api_config.dart';
+import '../../renter/api/api_config.dart';
 
 class AuthApiException implements Exception {
   final String message;
@@ -25,18 +25,16 @@ class AuthApi {
   static const _userIdKey = 'auth_user_id';
   static const _userTypeKey = 'auth_user_type';
 
+  static Future<Map<String, dynamic>?>? _refreshInFlight;
+
   static Future<Map<String, dynamic>> login({
     required String identifier,
     required String password,
   }) async {
-    final response = await _post(
-      '/user/login',
-      {
-        'identifier': identifier.trim(),
-        'password': password,
-      },
-    );
-
+    final response = await _postPublic('/user/login', {
+      'identifier': identifier.trim(),
+      'password': password,
+    });
     final data = _successfulMap(response, 'Login failed.');
     final user = _readSessionResponse(data);
     await _storeSession(data, user);
@@ -44,14 +42,26 @@ class AuthApi {
   }
 
   static Future<Map<String, dynamic>?> restoreSession() async {
+    final activeRefresh = _refreshInFlight;
+    if (activeRefresh != null) return activeRefresh;
+
+    final refresh = _restoreSessionInternal();
+    _refreshInFlight = refresh;
+    try {
+      return await refresh;
+    } finally {
+      if (identical(_refreshInFlight, refresh)) _refreshInFlight = null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> _restoreSessionInternal() async {
     final refreshToken = await _storage.read(key: _refreshTokenKey);
     if (refreshToken == null || refreshToken.isEmpty) return null;
 
     try {
-      final response = await _post(
-        '/user/refresh',
-        {'refreshToken': refreshToken},
-      );
+      final response = await _postPublic('/user/refresh', {
+        'refreshToken': refreshToken,
+      });
       final data = _successfulMap(response, 'Could not restore session.');
       final user = _readSessionResponse(data);
       await _storeSession(data, user);
@@ -62,15 +72,16 @@ class AuthApi {
     }
   }
 
+  static Future<bool> refreshAccessToken() async {
+    return await restoreSession() != null;
+  }
+
   static Future<void> logout() async {
     final refreshToken = await _storage.read(key: _refreshTokenKey);
-
     try {
       if (refreshToken != null && refreshToken.isNotEmpty) {
-        await _post('/user/logout', {'refreshToken': refreshToken});
+        await _postPublic('/user/logout', {'refreshToken': refreshToken});
       }
-    } catch (_) {
-      // Local logout must still succeed if the device is offline.
     } finally {
       await clearLocalSession();
     }
@@ -88,11 +99,19 @@ class AuthApi {
   static Future<String?> getAccessToken() =>
       _storage.read(key: _accessTokenKey);
 
-  static Future<Map<String, String>> authorizedHeaders() async {
+  static Future<String?> getStoredUserId() =>
+      _storage.read(key: _userIdKey);
+
+  static Future<String?> getStoredUserType() =>
+      _storage.read(key: _userTypeKey);
+
+  static Future<Map<String, String>> authorizedHeaders({
+    bool json = true,
+  }) async {
     final token = await getAccessToken();
     return {
-      'Content-Type': 'application/json',
       'Accept': 'application/json',
+      if (json) 'Content-Type': 'application/json',
       if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
     };
   }
@@ -112,7 +131,7 @@ class AuthApi {
     required String location,
     required bool hasAcceptedTerms,
   }) async {
-    final response = await _post('/user/create', {
+    final response = await _postPublic('/user/create', {
       'username': username.trim(),
       'email': email.trim().toLowerCase(),
       'password': password,
@@ -128,12 +147,11 @@ class AuthApi {
       'occupation': occupation.trim(),
       'location': location.trim(),
     });
-
     final data = _successfulMap(response, 'Could not create your account.');
     return data['message']?.toString() ?? 'Account created successfully.';
   }
 
-  static Future<http.Response> _post(
+  static Future<http.Response> _postPublic(
     String path,
     Map<String, dynamic> body,
   ) async {
@@ -152,8 +170,6 @@ class AuthApi {
       throw const AuthApiException(
         'The server took too long to respond. Please try again.',
       );
-    } on AuthApiException {
-      rethrow;
     } catch (_) {
       throw const AuthApiException(
         'Could not connect to the server. Check your connection and try again.',

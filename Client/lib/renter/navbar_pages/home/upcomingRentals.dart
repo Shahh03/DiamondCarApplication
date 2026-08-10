@@ -20,10 +20,10 @@ class UpcomingRentals extends StatefulWidget {
   });
 
   @override
-  State<UpcomingRentals> createState() => _UpcomingRentalsState();
+  State<UpcomingRentals> createState() => UpcomingRentalsState();
 }
 
-class _UpcomingRentalsState extends State<UpcomingRentals> {
+class UpcomingRentalsState extends State<UpcomingRentals> {
   List<dynamic> _bookings = [];
   bool _isLoading = true;
   String? _errorMessage;
@@ -33,6 +33,8 @@ class _UpcomingRentalsState extends State<UpcomingRentals> {
     super.initState();
     _loadBookings();
   }
+
+  Future<void> refresh() => _loadBookings();
 
   Future<void> _loadBookings() async {
     if (mounted) {

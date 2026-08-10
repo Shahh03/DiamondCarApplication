@@ -9,6 +9,7 @@ import reviewRoute from "./review.route.js";
 import userRoute from "./user.route.js";
 import carVariantRoute from "./carVariant.route.js";
 import activityRoute from "./activity.route.js";
+import passwordResetRoute from "./passwordReset.route.js";
 
 export default (app) => {
   app.use(bookingRoute);
@@ -21,5 +22,6 @@ export default (app) => {
   app.use(userRoute);
   app.use(carVariantRoute);
   app.use(activityRoute);
+  app.use(passwordResetRoute);
 
 };

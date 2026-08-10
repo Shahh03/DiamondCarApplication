@@ -1,79 +1,36 @@
-import 'dart:async';
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
-
-import 'api_config.dart';
+import '../../core/network/authenticated_client.dart';
 
 class BookingApi {
-  static const Duration _timeout = Duration(seconds: 15);
-
   static Future<List<dynamic>> getUpcomingBookings(String renterId) async {
-    final response = await http
-        .get(
-          Uri.parse(
-            '${ApiConfig.baseUrl}/renter/getUpcomingBookings/$renterId',
-          ),
-        )
-        .timeout(_timeout);
-
-    if (_isSuccessful(response)) {
-      final decoded = _decode(response.body);
-      return decoded is List ? decoded : <dynamic>[];
-    }
-
-    throw Exception(_message(response, 'Failed to load upcoming bookings.'));
+    final response = await AuthenticatedClient.get(
+      '/renter/getUpcomingBookings/$renterId',
+    );
+    return _list(response, 'Failed to load upcoming bookings.');
   }
 
   static Future<List<dynamic>> getRenterBookings(String renterId) async {
-    final response = await http
-        .get(
-          Uri.parse('${ApiConfig.baseUrl}/renter/getBookings/$renterId'),
-        )
-        .timeout(_timeout);
-
-    if (_isSuccessful(response)) {
-      final decoded = _decode(response.body);
-      return decoded is List ? decoded : <dynamic>[];
-    }
-
-    throw Exception(_message(response, 'Failed to load bookings.'));
+    final response = await AuthenticatedClient.get(
+      '/renter/getBookings/$renterId',
+    );
+    return _list(response, 'Failed to load bookings.');
   }
 
-  static Future<Map<String, dynamic>> getBookingById(
-    String bookingId,
-  ) async {
-    final response = await http
-        .get(Uri.parse('${ApiConfig.baseUrl}/booking/get/$bookingId'))
-        .timeout(_timeout);
-    final data = _map(response.body);
-
-    if (_isSuccessful(response)) return data;
-
-    throw Exception(_message(response, 'Failed to load booking details.'));
+  static Future<Map<String, dynamic>> getBookingById(String bookingId) async {
+    final response = await AuthenticatedClient.get('/booking/get/$bookingId');
+    return _mapResult(response, 'Failed to load booking details.');
   }
 
   static Future<List<Map<String, dynamic>>> getUnavailableDateRanges(
     String carVariantId,
   ) async {
-    final response = await http
-        .get(
-          Uri.parse(
-            '${ApiConfig.baseUrl}/booking/unavailable-dates/$carVariantId',
-          ),
-        )
-        .timeout(_timeout);
-    final data = _map(response.body);
-
-    if (!_isSuccessful(response)) {
-      throw Exception(
-        _message(response, 'Could not load unavailable dates.'),
-      );
-    }
-
+    final response = await AuthenticatedClient.get(
+      '/booking/unavailable-dates/$carVariantId',
+    );
+    final data = _mapResult(response, 'Could not load unavailable dates.');
     final ranges = data['unavailableRanges'];
     if (ranges is! List) return <Map<String, dynamic>>[];
-
     return ranges
         .whereType<Map>()
         .map((range) => Map<String, dynamic>.from(range))
@@ -85,21 +42,12 @@ class BookingApi {
     required DateTime startDate,
     required DateTime endDate,
   }) async {
-    final url = Uri.parse(
-      '${ApiConfig.baseUrl}/booking/availability/$carVariantId',
-    ).replace(
-      queryParameters: {
-        'startDate': startDate.toIso8601String(),
-        'endDate': endDate.toIso8601String(),
-      },
+    final start = Uri.encodeQueryComponent(startDate.toIso8601String());
+    final end = Uri.encodeQueryComponent(endDate.toIso8601String());
+    final response = await AuthenticatedClient.get(
+      '/booking/availability/$carVariantId?startDate=$start&endDate=$end',
     );
-
-    final response = await http.get(url).timeout(_timeout);
-    final data = _map(response.body);
-
-    if (_isSuccessful(response)) return data;
-
-    throw Exception(_message(response, 'Could not check availability.'));
+    return _mapResult(response, 'Could not check availability.');
   }
 
   static Future<Map<String, dynamic>> createStripePaymentIntent({
@@ -109,68 +57,54 @@ class BookingApi {
     required DateTime endDate,
     required bool savePaymentMethod,
   }) async {
-    final response = await http
-        .post(
-          Uri.parse('${ApiConfig.baseUrl}/stripe/payment-intent'),
-          headers: const {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: jsonEncode({
-            'renter': renterId,
-            'carVariant': carVariantId,
-            'startDate': startDate.toIso8601String(),
-            'endDate': endDate.toIso8601String(),
-            'savePaymentMethod': savePaymentMethod,
-          }),
-        )
-        .timeout(_timeout);
-
-    final data = _map(response.body);
-    if (_isSuccessful(response)) return data;
-
-    throw Exception(_message(response, 'Could not start the payment.'));
+    final response = await AuthenticatedClient.post(
+      '/stripe/payment-intent',
+      body: {
+        'renter': renterId,
+        'carVariant': carVariantId,
+        'startDate': startDate.toIso8601String(),
+        'endDate': endDate.toIso8601String(),
+        'savePaymentMethod': savePaymentMethod,
+      },
+    );
+    return _mapResult(response, 'Could not start the payment.');
   }
 
   static Future<Map<String, dynamic>> getStripePaymentStatus(
     String paymentIntentId,
   ) async {
-    final response = await http
-        .get(
-          Uri.parse(
-            '${ApiConfig.baseUrl}/stripe/payment-status/'
-            '${Uri.encodeComponent(paymentIntentId)}',
-          ),
-        )
-        .timeout(_timeout);
-    final data = _map(response.body);
-
-    if (_isSuccessful(response)) return data;
-
-    throw Exception(
-      _message(response, 'Could not verify the payment status.'),
+    final response = await AuthenticatedClient.get(
+      '/stripe/payment-status/${Uri.encodeComponent(paymentIntentId)}',
     );
+    return _mapResult(response, 'Could not verify the payment status.');
   }
 
   static Future<String> cancelBooking(String bookingId) async {
-    final response = await http
-        .put(Uri.parse('${ApiConfig.baseUrl}/booking/cancel/$bookingId'))
-        .timeout(_timeout);
-
-    if (_isSuccessful(response)) {
-      return _map(response.body)['message']?.toString() ??
-          'Booking cancelled successfully.';
-    }
-
-    throw Exception(_message(response, 'Could not cancel the booking.'));
+    final response = await AuthenticatedClient.put(
+      '/booking/cancel/$bookingId',
+    );
+    final data = _mapResult(response, 'Could not cancel the booking.');
+    return data['message']?.toString() ?? 'Booking cancelled successfully.';
   }
 
-  static bool _isSuccessful(http.Response response) =>
-      response.statusCode >= 200 && response.statusCode < 300;
+  static List<dynamic> _list(dynamic response, String fallback) {
+    if (!_successful(response.statusCode)) {
+      throw Exception(_message(response.body, response.statusCode, fallback));
+    }
+    final decoded = _decode(response.body);
+    return decoded is List ? List<dynamic>.from(decoded) : <dynamic>[];
+  }
+
+  static Map<String, dynamic> _mapResult(dynamic response, String fallback) {
+    final data = _map(response.body);
+    if (_successful(response.statusCode)) return data;
+    throw Exception(_message(response.body, response.statusCode, fallback));
+  }
+
+  static bool _successful(int code) => code >= 200 && code < 300;
 
   static dynamic _decode(String body) {
     if (body.trim().isEmpty) return null;
-
     try {
       return jsonDecode(body);
     } on FormatException {
@@ -185,10 +119,8 @@ class BookingApi {
         : <String, dynamic>{};
   }
 
-  static String _message(http.Response response, String fallback) {
-    final message = _map(response.body)['message']?.toString().trim();
-    return message?.isNotEmpty == true
-        ? message!
-        : '$fallback (${response.statusCode})';
+  static String _message(String body, int code, String fallback) {
+    final message = _map(body)['message']?.toString().trim();
+    return message?.isNotEmpty == true ? message! : '$fallback ($code)';
   }
 }

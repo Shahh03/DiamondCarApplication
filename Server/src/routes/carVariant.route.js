@@ -1,39 +1,66 @@
 import express from "express";
-import {
-  getAllCarsForProvider,
-  createCarVariant,
-  getCarVariantsByCarId,
-  getAllAvaiableCarVariants,
-  getCarVariantByID,
-  uploadCarVariantImages,
-  getRecommendedCarVariants,
-} from "../controllers/carVariant/carVariant.controller.js";
 
-const router = express.Router();
+import {
+  createCarVariant,
+  getAllAvaiableCarVariants,
+  getAllCarsForProvider,
+  getCarVariantByID,
+  getCarVariantsByCarId,
+  getRecommendedCarVariants,
+  uploadCarVariantImages,
+} from "../controllers/carVariant/carVariant.controller.js";
+import { authenticateAccessToken } from "../middlewares/auth.js";
+import {
+  requireAcceptedProvider,
+  requireBodyOwner,
+  requireCarVariantProvider,
+  requireParamOwner,
+} from "../middlewares/authorization.js";
 import { carUpload } from "../middlewares/upload.js";
 
-router.post("/carVariant/create", createCarVariant); //works
+const router = express.Router();
 
-router.get("/carVariant/getCarVariantsByCarId/:carId", getCarVariantsByCarId) //works
+// Public catalogue endpoints.
+router.get("/carVariant/getCarVariantsByCarId/:carId", getCarVariantsByCarId);
+router.get("/carVariant/getAllAvailable", getAllAvaiableCarVariants);
 
-router.get("/carVariant/getAllCarsForProvider/:providerId", getAllCarsForProvider); //works
+// Personalized renter endpoint.
+router.get(
+  "/carVariant/recommended/:renterId",
+  authenticateAccessToken,
+  requireParamOwner({ parameter: "renterId", type: "Renter" }),
+  getRecommendedCarVariants
+);
 
-router.get("/carVariant/getAllAvailable/", getAllAvaiableCarVariants); //works
-
-router.get("/carVariant/:carVariantId", getCarVariantByID); //works
-
-
-router.get("/carVariant/recommended/:renterId",getRecommendedCarVariants);
-
+// Provider-owned inventory endpoints.
+router.post(
+  "/carVariant/create",
+  authenticateAccessToken,
+  requireBodyOwner({ field: "provider", type: "Provider", allowAdmin: true }),
+  requireAcceptedProvider,
+  createCarVariant
+);
+router.get(
+  "/carVariant/getAllCarsForProvider/:providerId",
+  authenticateAccessToken,
+  requireParamOwner({
+    parameter: "providerId",
+    type: "Provider",
+    allowAdmin: true,
+  }),
+  getAllCarsForProvider
+);
 router.post(
   "/carVariant/uploadCarVariantImages/:carVariantId",
+  authenticateAccessToken,
+  requireCarVariantProvider,
+  requireAcceptedProvider,
+  // Ownership is checked before Multer accepts image bytes.
   carUpload.array("files", 10),
   uploadCarVariantImages
 );
 
-
-
+// Keep the dynamic route last.
+router.get("/carVariant/:carVariantId", getCarVariantByID);
 
 export default router;
-
-

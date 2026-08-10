@@ -2,13 +2,18 @@ import Renter from "../../models/renter.js";
 import Booking from "../../models/booking.js";
 import CarVariant from "../../models/carVariant.js";
 import User from "../../models/user.js";
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
 import { uploadBufferToCloudinary } from "../../utils/uploadToCloudinary.js";
+import {
+  hashPassword,
+  isHashedPassword,
+  verifyPassword,
+} from "../../utils/password.js";
 import { v2 as cloudinary } from 'cloudinary';
 
 
@@ -130,24 +135,39 @@ export const updateRenterCurrency = async (req, res) => {
 
 export const changeRenterUsername = async (req, res) => {
   try {
-    const renterId = req.params.renterId;
+    const { renterId } = req.params;
     const { username, password } = req.body;
 
-    if (!username || !password) {
+    if (req.auth?.userId !== renterId) {
+      return res.status(403).json({
+        message: "You can only change your own username",
+      });
+    }
+
+    if (!mongoose.isValidObjectId(renterId)) {
+      return res.status(400).json({ message: "Invalid renter ID" });
+    }
+
+    if (typeof username !== "string" || typeof password !== "string") {
       return res.status(400).json({
         message: "Username and password are required",
       });
     }
 
-    const newUsername = username.trim();
+    const newUsername = username.trim().toLowerCase();
 
-    if (newUsername.length < 4) {
+    if (!/^[a-z0-9._-]{4,30}$/.test(newUsername)) {
       return res.status(400).json({
-        message: "Username must be at least 4 characters",
+        message:
+          "Username must be 4-30 characters and may only contain letters, numbers, dots, underscores, or hyphens",
       });
     }
 
-    const renter = await Renter.findById(renterId);
+    if (password.length === 0) {
+      return res.status(400).json({ message: "Current password is required" });
+    }
+
+    const renter = await Renter.findById(renterId).select("+password");
 
     if (!renter) {
       return res.status(404).json({
@@ -161,10 +181,10 @@ export const changeRenterUsername = async (req, res) => {
       });
     }
 
-    // For now, because your password code is still plain text:
-    if (password !== renter.password) {
-      return res.status(400).json({
-        message: "Incorrect password",
+    const passwordIsValid = await verifyPassword(password, renter.password);
+    if (!passwordIsValid) {
+      return res.status(401).json({
+        message: "Current password is incorrect",
       });
     }
 
@@ -174,9 +194,12 @@ export const changeRenterUsername = async (req, res) => {
       });
     }
 
-    const existingUser = await User.findOne({ username: newUsername });
+    const existingUser = await User.exists({
+      _id: { $ne: renterId },
+      username: newUsername,
+    });
 
-    if (existingUser && existingUser._id.toString() !== renterId) {
+    if (existingUser) {
       return res.status(409).json({
         message: "Username already taken",
       });
@@ -202,48 +225,116 @@ export const changeRenterUsername = async (req, res) => {
     renter.usernameLastChangedAt = new Date();
     renter.usernameChangeCount = (renter.usernameChangeCount || 0) + 1;
 
+    // Upgrade a legacy plaintext password after successful verification.
+    if (!isHashedPassword(renter.password)) {
+      renter.password = await hashPassword(password);
+    }
+
     await renter.save();
 
     return res.status(200).json({
       message: "Username updated successfully",
+      username: renter.username,
     });
   } catch (error) {
     console.error("Change username error:", error);
-    return res.status(500).json({
-      message: error.message,
-    });
+
+    if (error?.code === 11000) {
+      return res.status(409).json({ message: "Username already taken" });
+    }
+
+    return res.status(500).json({ message: "Could not update username" });
   }
 };
 
 export const changeRenterPassword = async (req, res) => {
   try {
-    const renterId = req.params.renterId; 
-    const {oldPassword, newPassword } = req.body;
+    const { renterId } = req.params;
+    const { oldPassword, newPassword } = req.body;
 
-    const renter = await Renter.findById(renterId);
+    if (req.auth?.userId !== renterId) {
+      return res.status(403).json({
+        message: "You can only change your own password",
+      });
+    }
+
+    if (!mongoose.isValidObjectId(renterId)) {
+      return res.status(400).json({ message: "Invalid renter ID" });
+    }
+
+    if (typeof oldPassword !== "string" || typeof newPassword !== "string") {
+      return res.status(400).json({
+        message: "Current password and new password are required",
+      });
+    }
+
+    if (oldPassword.length === 0 || newPassword.length === 0) {
+      return res.status(400).json({
+        message: "Current password and new password are required",
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        message: "New password must be at least 8 characters",
+      });
+    }
+
+    // bcrypt only considers the first 72 UTF-8 bytes.
+    if (Buffer.byteLength(newPassword, "utf8") > 72) {
+      return res.status(400).json({
+        message: "New password must not exceed 72 bytes",
+      });
+    }
+
+    const renter = await Renter.findById(renterId).select(
+      "+password +refreshTokens"
+    );
     if (!renter) {
-      return res.status(404).json({ message: 'Renter not found' });
+      return res.status(404).json({ message: "Renter not found" });
     }
 
-
-    if (oldPassword!==renter.password) {
-      return res.status(400).json({ message: 'Old password is incorrect' });
+    if (renter.type !== "Renter") {
+      return res.status(403).json({
+        message: "Only renters can change their password",
+      });
     }
 
-    if (oldPassword === newPassword) {
-      return res.status(400).json({ message: 'New password cannot be the same as the old password' });
+    const oldPasswordIsValid = await verifyPassword(
+      oldPassword,
+      renter.password
+    );
+    if (!oldPasswordIsValid) {
+      return res.status(401).json({
+        message: "Current password is incorrect",
+      });
     }
 
-    renter.password = newPassword;
+    const passwordWasReused = await verifyPassword(
+      newPassword,
+      renter.password
+    );
+    if (passwordWasReused) {
+      return res.status(400).json({
+        message: "New password cannot be the same as the current password",
+      });
+    }
+
+    renter.password = await hashPassword(newPassword);
+
+    // Revoke every remembered session after a password change.
+    renter.refreshTokens = [];
     await renter.save();
 
-    res.status(200).json({ message: 'Password updated successfully' });
-  }catch (error) {
-    console.error('Update error:', error);
-    res.status(500).json({ message: error.message });
+    return res.status(200).json({
+      message: "Password updated successfully. Please sign in again.",
+      requiresLogin: true,
+    });
+  } catch (error) {
+    console.error("Change password error:", error);
+    return res.status(500).json({ message: "Could not update password" });
   }
-
-}
+};
    
 
 export const getWishlistforRenter = async (req, res) => {

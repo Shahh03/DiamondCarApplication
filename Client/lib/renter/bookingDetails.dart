@@ -1,8 +1,7 @@
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
+import 'api/booking_api.dart';
 
 class BookingDetailsPage extends StatefulWidget {
   final String bookingId;
@@ -38,23 +37,8 @@ class _BookingDetailsPageState extends State<BookingDetailsPage> {
   }
 
   Future<Map<String, dynamic>> fetchBookingDetails() async {
-    final url = Uri.parse(
-      'http://10.0.2.2:8000/booking/get/${widget.bookingId}',
-    );
-
-    final response = await http.get(url).timeout(const Duration(seconds: 15));
-
-    if (response.statusCode != 200) {
-      throw Exception('The server returned ${response.statusCode}.');
-    }
-
-    final decoded = json.decode(response.body);
-    if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('The booking response has an invalid format.');
-    }
-
-    return decoded;
-  }
+  return BookingApi.getBookingById(widget.bookingId);
+}
 
   Future<void> _reload() async {
     if (_imageController.hasClients) {
