@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
-import '../../renter/api/api_config.dart';
+import '../../core/network/api_config.dart';
 
 class AuthApiException implements Exception {
   final String message;

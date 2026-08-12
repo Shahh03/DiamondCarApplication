@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../admin/dashboard.dart';
 import 'api/auth_api.dart';
-import '../provider/dashboard.dart';
+import '../provider/dashboard/provider_dashboard.dart';
+import '../provider/bottom_navbar/provider_navbar.dart';
 import '../renter/navbar_pages/home/home.dart';
 
 const _primary = Color(0xFF1D4ED8);
@@ -81,7 +82,7 @@ class _LoginPageState extends State<LoginPage> {
       case 'Renter':
         return RenterHome(renterId: id);
       case 'Provider':
-        return ProviderDashboard(id: id);
+        return ProviderNavbar(providerId: id,);
       case 'Admin':
         return AdminDashboard(id: id);
       default:

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../admin/dashboard.dart';
-import '../provider/dashboard.dart';
+import '../provider/dashboard/dashboard.dart';
 import '../renter/navbar_pages/home/home.dart';
 import 'api/auth_api.dart';
 import 'welcome.dart';

@@ -66,6 +66,12 @@ const providerSchema = new mongoose.Schema({
     type: String,
     default: "",
   },
+  currency: {
+  type: String,
+  enum: ["AED", "SAR", "QAR", "OMR", "BHD", "USD", "EUR", "GBP"],
+  default: "AED",
+  required: true,
+},
 
 });
 

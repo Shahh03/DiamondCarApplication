@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 import '../../authentication/api/auth_api.dart';
-import '../../renter/api/api_config.dart';
+import '../../core/network/api_config.dart';
 
 class AuthenticatedClient {
   static const _timeout = Duration(seconds: 20);
