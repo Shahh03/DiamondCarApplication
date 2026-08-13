@@ -12,31 +12,18 @@ const carVariantSchema = new mongoose.Schema(
       ref: "Car",
       required: true,
     },
-    color: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+    color: { type: String, required: true, trim: true },
     registrationNumber: {
       type: String,
       required: true,
       unique: true,
       trim: true,
     },
-    rentalPricePerDay: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-    depositAmount: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-    isAvailable: {
-      type: Boolean,
-      default: true,
-    },
+    rentalPricePerDay: { type: Number, required: true, min: 0 },
+    depositAmount: { type: Number, required: true, min: 0 },
+    isAvailable: { type: Boolean, default: true },
+    isListed: { type: Boolean, default: true, index: true },
+    archivedAt: { type: Date, default: null },
     insuranceDetails: {
       insuranceCompany: { type: String, trim: true },
       policyNumber: { type: String, trim: true },
@@ -55,9 +42,9 @@ const carVariantSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-carVariantSchema.index({ isAvailable: 1, rentalPricePerDay: 1 });
-carVariantSchema.index({ provider: 1, isAvailable: 1 });
-carVariantSchema.index({ car: 1, isAvailable: 1 });
+carVariantSchema.index({ isListed: 1, isAvailable: 1, rentalPricePerDay: 1 });
+carVariantSchema.index({ provider: 1, isListed: 1, isAvailable: 1 });
+carVariantSchema.index({ car: 1, isListed: 1, isAvailable: 1 });
 
 const CarVariant = mongoose.model("CarVariant", carVariantSchema);
 

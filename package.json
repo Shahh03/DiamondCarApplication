@@ -2,7 +2,11 @@
   "name": "diamond-car-application",
   "private": true,
   "scripts": {
-    "dev": "concurrently --kill-others-on-fail --names SERVER,STRIPE,FLUTTER --prefix-colors blue,magenta,green \"npm --prefix Server run dev\" \"stripe listen --forward-to localhost:8000/stripe/webhook\" \"cd Client && flutter run\""
+  "dev:server": "npm --prefix Server run dev",
+  "dev:stripe": "stripe listen --forward-to localhost:8000/stripe/webhook",
+  "dev:mobile": "cd Client/mobile-app && flutter run",
+  "dev:portal": "npm --prefix Client/management-portal run dev",
+  "dev": "concurrently --kill-others-on-fail --names SERVER,STRIPE,FLUTTER,PORTAL --prefix-colors blue,magenta,green,cyan \"npm run dev:server\" \"npm run dev:stripe\" \"npm run dev:mobile\" \"npm run dev:portal\""
   },
   "dependencies": {
     "cloudinary": "^1.41.3",

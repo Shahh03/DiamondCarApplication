@@ -1,12 +1,15 @@
 import express from "express";
 
 import {
+  archiveCarVariant,
   createCarVariant,
   getAllAvaiableCarVariants,
   getAllCarsForProvider,
   getCarVariantByID,
   getCarVariantsByCarId,
   getRecommendedCarVariants,
+  removeCarVariantImage,
+  updateCarVariant,
   uploadCarVariantImages,
 } from "../controllers/carVariant/carVariant.controller.js";
 import { authenticateAccessToken } from "../middlewares/auth.js";
@@ -20,11 +23,9 @@ import { carUpload } from "../middlewares/upload.js";
 
 const router = express.Router();
 
-// Public catalogue endpoints.
 router.get("/carVariant/getCarVariantsByCarId/:carId", getCarVariantsByCarId);
 router.get("/carVariant/getAllAvailable", getAllAvaiableCarVariants);
 
-// Personalized renter endpoint.
 router.get(
   "/carVariant/recommended/:renterId",
   authenticateAccessToken,
@@ -32,7 +33,6 @@ router.get(
   getRecommendedCarVariants
 );
 
-// Provider-owned inventory endpoints.
 router.post(
   "/carVariant/create",
   authenticateAccessToken,
@@ -40,6 +40,7 @@ router.post(
   requireAcceptedProvider,
   createCarVariant
 );
+
 router.get(
   "/carVariant/getAllCarsForProvider/:providerId",
   authenticateAccessToken,
@@ -50,17 +51,41 @@ router.get(
   }),
   getAllCarsForProvider
 );
+
+router.put(
+  "/carVariant/update/:carVariantId",
+  authenticateAccessToken,
+  requireCarVariantProvider,
+  requireAcceptedProvider,
+  updateCarVariant
+);
+
 router.post(
   "/carVariant/uploadCarVariantImages/:carVariantId",
   authenticateAccessToken,
   requireCarVariantProvider,
   requireAcceptedProvider,
-  // Ownership is checked before Multer accepts image bytes.
   carUpload.array("files", 10),
   uploadCarVariantImages
 );
 
-// Keep the dynamic route last.
+router.delete(
+  "/carVariant/:carVariantId/image",
+  authenticateAccessToken,
+  requireCarVariantProvider,
+  requireAcceptedProvider,
+  removeCarVariantImage
+);
+
+router.delete(
+  "/carVariant/:carVariantId",
+  authenticateAccessToken,
+  requireCarVariantProvider,
+  requireAcceptedProvider,
+  archiveCarVariant
+);
+
+// Keep the dynamic public route last.
 router.get("/carVariant/:carVariantId", getCarVariantByID);
 
 export default router;
