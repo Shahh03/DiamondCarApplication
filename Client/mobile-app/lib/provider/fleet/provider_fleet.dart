@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import '../api/provider_fleet_api.dart';
 import '../provider_data_scope.dart';
 import '../provider_ui.dart';
-import 'provider_edit_car.dart';
+import 'provider_car_details.dart';
 
 class ProviderFleetPage extends StatefulWidget {
   final String providerId;
@@ -24,9 +24,34 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
       TextEditingController();
 
   List<Map<String, dynamic>> _variants = <Map<String, dynamic>>[];
+  String _availabilityFilter = 'All';
+  String? _categoryFilter;
+  String? _transmissionFilter;
+  String? _fuelTypeFilter;
 
   bool _isLoading = true;
   String? _error;
+
+  int get _availableCount =>
+      _variants.where((variant) => variant['isAvailable'] == true).length;
+
+  int get _unavailableCount => _variants.length - _availableCount;
+
+  int get _activeFilterCount =>
+      (_availabilityFilter == 'All' ? 0 : 1) +
+      (_categoryFilter == null ? 0 : 1) +
+      (_transmissionFilter == null ? 0 : 1) +
+      (_fuelTypeFilter == null ? 0 : 1);
+
+  List<String> _carOptions(String field) {
+    final values = _variants
+        .map((variant) => _asMap(variant['car'])[field]?.toString().trim() ?? '')
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    return values;
+  }
 
   @override
   void initState() {
@@ -84,12 +109,26 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
     final query =
         _searchController.text.trim().toLowerCase();
 
-    if (query.isEmpty) {
-      return _variants;
-    }
-
     return _variants.where((variant) {
+      final isAvailable = variant['isAvailable'] == true;
+      if (_availabilityFilter == 'Available' && !isAvailable) return false;
+      if (_availabilityFilter == 'Unavailable' && isAvailable) return false;
+
       final car = _asMap(variant['car']);
+      if (_categoryFilter != null &&
+          car['category']?.toString() != _categoryFilter) {
+        return false;
+      }
+      if (_transmissionFilter != null &&
+          car['transmission']?.toString() != _transmissionFilter) {
+        return false;
+      }
+      if (_fuelTypeFilter != null &&
+          car['fuelType']?.toString() != _fuelTypeFilter) {
+        return false;
+      }
+
+      if (query.isEmpty) return true;
 
       final searchableValues = [
         car['brand'],
@@ -113,34 +152,165 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
     }).toList();
   }
 
-  void _openAddCar() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'The Add Car screen will be implemented next.',
+  Future<void> _showFilters() async {
+    var availability = _availabilityFilter;
+    var category = _categoryFilter;
+    var transmission = _transmissionFilter;
+    var fuelType = _fuelTypeFilter;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => Container(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            10,
+            20,
+            20 + MediaQuery.viewPaddingOf(context).bottom,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 42,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: providerBorder,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'Filter fleet',
+                    style: TextStyle(
+                      color: providerInk,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Narrow vehicles by availability and specifications.',
+                    style: TextStyle(color: providerMuted),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Availability',
+                    style: TextStyle(
+                      color: providerInk,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: ['All', 'Available', 'Unavailable']
+                        .map(
+                          (value) => Expanded(
+                            child: Padding(
+                              padding: EdgeInsets.only(
+                                right: value == 'Unavailable' ? 0 : 8,
+                              ),
+                              child: _FleetFilter(
+                                label: value,
+                                selected: availability == value,
+                                onTap: () => setSheetState(
+                                  () => availability = value,
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  _FilterDropdown(
+                    label: 'Category',
+                    value: category,
+                    options: _carOptions('category'),
+                    onChanged: (value) => setSheetState(() => category = value),
+                  ),
+                  const SizedBox(height: 14),
+                  _FilterDropdown(
+                    label: 'Transmission',
+                    value: transmission,
+                    options: _carOptions('transmission'),
+                    onChanged: (value) =>
+                        setSheetState(() => transmission = value),
+                  ),
+                  const SizedBox(height: 14),
+                  _FilterDropdown(
+                    label: 'Fuel type',
+                    value: fuelType,
+                    options: _carOptions('fuelType'),
+                    onChanged: (value) => setSheetState(() => fuelType = value),
+                  ),
+                  const SizedBox(height: 22),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => setSheetState(() {
+                            availability = 'All';
+                            category = null;
+                            transmission = null;
+                            fuelType = null;
+                          }),
+                          child: const Text('Clear all'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () {
+                            setState(() {
+                              _availabilityFilter = availability;
+                              _categoryFilter = category;
+                              _transmissionFilter = transmission;
+                              _fuelTypeFilter = fuelType;
+                            });
+                            Navigator.pop(sheetContext);
+                          },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: providerPrimary,
+                          ),
+                          child: const Text('Apply filters'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Future<void> _openEditCar(Map<String, dynamic> variant) async {
+  void _openCarDetails(Map<String, dynamic> variant) {
     final providerScope = ProviderDataScope.of(context);
-    final changed = await Navigator.of(context).push<bool>(
+    Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ProviderDataScope(
           provider: providerScope.provider,
           refresh: providerScope.refresh,
-          child: ProviderEditCarPage(
-            providerId: widget.providerId,
+          child: ProviderCarDetailsPage(
             variant: variant,
           ),
         ),
       ),
     );
-
-    if (changed == true) {
-      await _loadFleet();
-    }
   }
 
   static Map<String, dynamic> _asMap(dynamic value) {
@@ -171,64 +341,93 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
                   title: 'My fleet',
                   subtitle:
                       '${_variants.length} vehicle${_variants.length == 1 ? '' : 's'} in your fleet',
-                  action: IconButton.filled(
-                    onPressed: _openAddCar,
-                    tooltip: 'Add car',
-                    icon: const Icon(Icons.add_rounded),
-                    style: IconButton.styleFrom(
-                      backgroundColor: providerPrimary,
-                    ),
+                  action: IconButton(
+                    onPressed: _isLoading ? null : _loadFleet,
+                    tooltip: 'Refresh fleet',
+                    icon: const Icon(Icons.refresh_rounded),
                   ),
                 ),
               ),
             ),
             SliverPadding(
-              padding:
-                  const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               sliver: SliverToBoxAdapter(
-                child: TextField(
-                  controller: _searchController,
-                  textInputAction: TextInputAction.search,
-                  decoration: InputDecoration(
-                    hintText:
-                        'Search brand, model or registration',
-                    prefixIcon:
-                        const Icon(Icons.search_rounded),
-                    suffixIcon:
-                        _searchController.text.isEmpty
-                            ? null
-                            : IconButton(
-                                onPressed:
-                                    _searchController.clear,
-                                icon: const Icon(
-                                  Icons.close_rounded,
+                child: _FleetSummary(
+                  total: _variants.length,
+                  available: _availableCount,
+                  unavailable: _unavailableCount,
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              sliver: SliverToBoxAdapter(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        textInputAction: TextInputAction.search,
+                        decoration: InputDecoration(
+                          hintText: 'Search brand, model or registration',
+                          prefixIcon: const Icon(Icons.search_rounded),
+                          suffixIcon: _searchController.text.isEmpty
+                              ? null
+                              : IconButton(
+                                  onPressed: _searchController.clear,
+                                  icon: const Icon(Icons.close_rounded),
                                 ),
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(color: providerBorder),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(color: providerBorder),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: const BorderSide(
+                              color: providerPrimary,
+                              width: 1.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    _FilterButton(
+                      count: _activeFilterCount,
+                      onTap: _showFilters,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              sliver: SliverToBoxAdapter(
+                child: Row(
+                  children: ['All', 'Available', 'Unavailable']
+                      .map(
+                        (filter) => Expanded(
+                          child: Padding(
+                            padding: EdgeInsets.only(
+                              right: filter == 'Unavailable' ? 0 : 8,
+                            ),
+                            child: _FleetFilter(
+                              label: filter,
+                              selected: _availabilityFilter == filter,
+                              onTap: () => setState(
+                                () => _availabilityFilter = filter,
                               ),
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius:
-                          BorderRadius.circular(16),
-                      borderSide: const BorderSide(
-                        color: providerBorder,
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius:
-                          BorderRadius.circular(16),
-                      borderSide: const BorderSide(
-                        color: providerBorder,
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius:
-                          BorderRadius.circular(16),
-                      borderSide: const BorderSide(
-                        color: providerPrimary,
-                        width: 1.5,
-                      ),
-                    ),
-                  ),
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
                 ),
               ),
             ),
@@ -244,11 +443,15 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
 
   List<Widget> _buildContent(String currency) {
     if (_isLoading) {
-      return const [
-        SliverFillRemaining(
-          hasScrollBody: false,
-          child: Center(
-            child: CircularProgressIndicator(),
+      return [
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          sliver: SliverList.list(
+            children: const [
+              _FleetSkeleton(),
+              SizedBox(height: 12),
+              _FleetSkeleton(),
+            ],
           ),
         ),
       ];
@@ -282,9 +485,7 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
               icon: Icons.directions_car_outlined,
               title: 'Your fleet is empty',
               message:
-                  'Add your first vehicle to begin receiving bookings.',
-              actionLabel: 'Add your first car',
-              onAction: _openAddCar,
+                  'Vehicles added through the management portal will appear here.',
             ),
           ),
         ),
@@ -328,7 +529,7 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
                 child: _FleetCard(
                   variant: variant,
                   currency: currency,
-                  onEdit: () => _openEditCar(variant),
+                  onView: () => _openCarDetails(variant),
                 ),
               );
             },
@@ -340,15 +541,324 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
   }
 }
 
+class _FleetSummary extends StatelessWidget {
+  final int total;
+  final int available;
+  final int unavailable;
+
+  const _FleetSummary({
+    required this.total,
+    required this.available,
+    required this.unavailable,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [providerPrimaryDark, Color(0xFF2563EB)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x242563EB),
+              blurRadius: 20,
+              offset: Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            _SummaryItem(
+              icon: Icons.directions_car_rounded,
+              label: 'Total',
+              value: total,
+            ),
+            const _SummaryDivider(),
+            _SummaryItem(
+              icon: Icons.check_circle_outline_rounded,
+              label: 'Available',
+              value: available,
+            ),
+            const _SummaryDivider(),
+            _SummaryItem(
+              icon: Icons.remove_circle_outline_rounded,
+              label: 'Unavailable',
+              value: unavailable,
+            ),
+          ],
+        ),
+      );
+}
+
+class _FilterButton extends StatelessWidget {
+  final int count;
+  final VoidCallback onTap;
+
+  const _FilterButton({required this.count, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Material(
+            color: count > 0 ? const Color(0xFFEFF6FF) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: count > 0 ? providerPrimary : providerBorder,
+                  ),
+                ),
+                child: Icon(
+                  Icons.tune_rounded,
+                  color: count > 0 ? providerPrimary : providerMuted,
+                ),
+              ),
+            ),
+          ),
+          if (count > 0)
+            Positioned(
+              top: -5,
+              right: -5,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                decoration: BoxDecoration(
+                  color: providerPrimary,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  '$count',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+}
+
+class _FilterDropdown extends StatelessWidget {
+  final String label;
+  final String? value;
+  final List<String> options;
+  final ValueChanged<String?> onChanged;
+
+  const _FilterDropdown({
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) => DropdownButtonFormField<String>(
+        value: options.contains(value) ? value : null,
+        isExpanded: true,
+        decoration: InputDecoration(
+          labelText: label,
+          filled: true,
+          fillColor: const Color(0xFFF8FAFC),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: const BorderSide(color: providerBorder),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(15),
+            borderSide: const BorderSide(color: providerBorder),
+          ),
+        ),
+        hint: Text('All ${label.toLowerCase()}'),
+        items: [
+          DropdownMenuItem<String>(
+            value: null,
+            child: Text('All ${label.toLowerCase()}'),
+          ),
+          ...options.map(
+            (option) => DropdownMenuItem<String>(
+              value: option,
+              child: Text(option),
+            ),
+          ),
+        ],
+        onChanged: onChanged,
+      );
+}
+
+class _SummaryItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final int value;
+
+  const _SummaryItem({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+        child: Column(
+          children: [
+            Icon(icon, color: const Color(0xFFBFDBFE), size: 21),
+            const SizedBox(height: 6),
+            Text(
+              '$value',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 2),
+            FittedBox(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFFDBEAFE),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _SummaryDivider extends StatelessWidget {
+  const _SummaryDivider();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 1,
+        height: 48,
+        color: Colors.white.withOpacity(0.18),
+      );
+}
+
+class _FleetFilter extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _FleetFilter({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: selected ? providerPrimary : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: selected ? providerPrimary : providerBorder,
+              ),
+            ),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: selected ? Colors.white : providerMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ),
+      );
+}
+
+class _FleetSkeleton extends StatelessWidget {
+  const _FleetSkeleton();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        height: 350,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: providerBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 170,
+              decoration: const BoxDecoration(
+                color: Color(0xFFEFF3F8),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _skeletonBlock(double.infinity, 17),
+                  const SizedBox(height: 10),
+                  _skeletonBlock(130, 12),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Expanded(child: _skeletonBlock(double.infinity, 52)),
+                      const SizedBox(width: 10),
+                      Expanded(child: _skeletonBlock(double.infinity, 52)),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  _skeletonBlock(double.infinity, 38),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+
+  static Widget _skeletonBlock(double width, double height) => Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: const Color(0xFFEFF3F8),
+          borderRadius: BorderRadius.circular(10),
+        ),
+      );
+}
+
 class _FleetCard extends StatelessWidget {
   final Map<String, dynamic> variant;
   final String currency;
-  final VoidCallback onEdit;
+  final VoidCallback onView;
 
   const _FleetCard({
     required this.variant,
     required this.currency,
-    required this.onEdit,
+    required this.onView,
   });
 
   static Map<String, dynamic> _asMap(dynamic value) {
@@ -393,6 +903,11 @@ class _FleetCard extends StatelessWidget {
     return '';
   }
 
+  int get _imageCount {
+    final images = variant['images'];
+    return images is List ? images.length : 0;
+  }
+
   @override
   Widget build(BuildContext context) {
     final car = _asMap(variant['car']);
@@ -430,6 +945,7 @@ class _FleetCard extends StatelessWidget {
           _VehicleImage(
             imageUrl: _imageUrl,
             isAvailable: isAvailable,
+            imageCount: _imageCount,
           ),
           Padding(
             padding:
@@ -454,10 +970,6 @@ class _FleetCard extends StatelessWidget {
                           fontWeight: FontWeight.w900,
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    _AvailabilityBadge(
-                      isAvailable: isAvailable,
                     ),
                   ],
                 ),
@@ -532,9 +1044,9 @@ class _FleetCard extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
-                    onPressed: onEdit,
-                    icon: const Icon(Icons.edit_outlined),
-                    label: const Text('Manage vehicle'),
+                    onPressed: onView,
+                    icon: const Icon(Icons.visibility_outlined),
+                    label: const Text('View details'),
                   ),
                 ),
               ],
@@ -549,10 +1061,12 @@ class _FleetCard extends StatelessWidget {
 class _VehicleImage extends StatelessWidget {
   final String imageUrl;
   final bool isAvailable;
+  final int imageCount;
 
   const _VehicleImage({
     required this.imageUrl,
     required this.isAvailable,
+    required this.imageCount,
   });
 
   @override
@@ -563,43 +1077,77 @@ class _VehicleImage extends StatelessWidget {
       ),
       child: AspectRatio(
         aspectRatio: 16 / 8.2,
-        child: Container(
-          width: double.infinity,
-          color: const Color(0xFFF1F5F9),
-          child: imageUrl.isEmpty
-              ? const Center(
-                  child: Icon(
-                    Icons.directions_car_rounded,
-                    size: 58,
-                    color: providerMuted,
-                  ),
-                )
-              : Image.network(
-                  imageUrl,
-                  fit: BoxFit.cover,
-                  loadingBuilder: (
-                    context,
-                    child,
-                    progress,
-                  ) {
-                    if (progress == null) return child;
-
-                    return const Center(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                      ),
-                    );
-                  },
-                  errorBuilder: (_, __, ___) {
-                    return const Center(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Container(
+              width: double.infinity,
+              color: const Color(0xFFF1F5F9),
+              child: imageUrl.isEmpty
+                  ? const Center(
                       child: Icon(
-                        Icons.broken_image_outlined,
-                        size: 45,
+                        Icons.directions_car_rounded,
+                        size: 58,
                         color: providerMuted,
                       ),
-                    );
-                  },
+                    )
+                  : Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (context, child, progress) {
+                        if (progress == null) return child;
+                        return const Center(
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        );
+                      },
+                      errorBuilder: (_, __, ___) => const Center(
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          size: 45,
+                          color: providerMuted,
+                        ),
+                      ),
+                    ),
+            ),
+            Positioned(
+              top: 12,
+              left: 12,
+              child: _AvailabilityBadge(isAvailable: isAvailable),
+            ),
+            if (imageCount > 0)
+              Positioned(
+                right: 12,
+                bottom: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.62),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.photo_library_outlined,
+                        color: Colors.white,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        '$imageCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+              ),
+          ],
         ),
       ),
     );

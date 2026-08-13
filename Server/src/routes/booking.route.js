@@ -5,9 +5,10 @@ import {
   checkBookingAvailability,
   getbookingbyId,
   getUnavailableDates,
+  getProviderBookings,
 } from "../controllers/booking/booking.controller.js";
 import { authenticateAccessToken } from "../middlewares/auth.js";
-import { requireBookingAccess } from "../middlewares/authorization.js";
+import { requireBookingAccess ,  requireParamOwner } from "../middlewares/authorization.js";
 
 const router = express.Router();
 
@@ -26,6 +27,16 @@ router.put(
   authenticateAccessToken,
   requireBookingAccess({ renterOnly: true }),
   cancelBooking
+);
+router.get(
+  "/booking/getbookingForProvider/:providerId",
+  authenticateAccessToken,
+  requireParamOwner({
+    parameter: "providerId",
+    type: "Provider",
+    allowAdmin: true,
+  }),
+  getProviderBookings
 );
 
 export default router;

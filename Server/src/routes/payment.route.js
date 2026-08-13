@@ -3,6 +3,7 @@ import express from "express";
 import {
   createCardSetupIntent,
   createStripePaymentIntent,
+  getProviderEarnings,
   getSavedPaymentMethods,
   getStripePaymentStatus,
   refundPayment,
@@ -60,6 +61,17 @@ router.delete(
   authenticateAccessToken,
   requireParamOwner({ parameter: "renterId", type: "Renter" }),
   removeSavedPaymentMethod
+);
+
+router.get(
+  "/provider/earnings/:providerId",
+  authenticateAccessToken,
+  requireParamOwner({
+    parameter: "providerId",
+    type: "Provider",
+    allowAdmin: true,
+  }),
+  getProviderEarnings
 );
 
 export default router;

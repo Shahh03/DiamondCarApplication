@@ -58,6 +58,13 @@ const paymentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Supports provider earnings summaries and newest-first transaction history.
+paymentSchema.index({ provider: 1, paymentDate: -1, paymentStatus: 1 });
+paymentSchema.index({
+  provider: 1,
+  "refundDetails.refundDate": -1,
+});
+
 const Payment = mongoose.model("Payment", paymentSchema);
 
 export default Payment;

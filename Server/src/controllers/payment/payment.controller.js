@@ -813,3 +813,237 @@ export const removeSavedPaymentMethod = async (req, res) => {
     );
   }
 };
+
+const roundedMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
+
+const parseEarningsRange = (fromValue, toValue) => {
+  const now = new Date();
+  const defaultFrom = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    1
+  ));
+  const from = fromValue ? new Date(fromValue) : defaultFrom;
+  const to = toValue ? new Date(toValue) : now;
+
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+    return { error: "from and to must be valid ISO dates" };
+  }
+  if (from > to) {
+    return { error: "from must be before to" };
+  }
+  if (to - from > 366 * 86_400_000) {
+    return { error: "Earnings range cannot exceed 366 days" };
+  }
+
+  return { from, to };
+};
+
+const chartBucket = (date, groupByMonth) => {
+  const value = new Date(date);
+  const year = value.getUTCFullYear();
+  const month = String(value.getUTCMonth() + 1).padStart(2, "0");
+  if (groupByMonth) return `${year}-${month}`;
+  const day = String(value.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const bookingSummary = (booking) => {
+  const car = booking?.carVariant?.car;
+  const brand = car?.brand?.trim() ?? "";
+  const model = car?.model?.trim() ?? "";
+  return {
+    bookingId: booking?._id ?? null,
+    carVariantId: booking?.carVariant?._id ?? null,
+    vehicle: `${brand} ${model}`.trim() || "Vehicle",
+    registrationNumber: booking?.carVariant?.registrationNumber ?? "",
+  };
+};
+
+// Provider-facing accounting summary. This reads only persisted payments
+// created by the verified Stripe webhook; Flutter never calculates earnings.
+export const getProviderEarnings = async (req, res) => {
+  try {
+    const { providerId } = req.params;
+    if (!mongoose.isValidObjectId(providerId)) {
+      return res.status(400).json({ message: "Invalid provider ID" });
+    }
+
+    const range = parseEarningsRange(req.query.from, req.query.to);
+    if (range.error) {
+      return res.status(400).json({ message: range.error });
+    }
+
+    const requestedLimit = Number.parseInt(req.query.limit, 10);
+    const transactionLimit = Number.isFinite(requestedLimit)
+      ? Math.min(100, Math.max(1, requestedLimit))
+      : 30;
+    const dateRange = { $gte: range.from, $lte: range.to };
+
+    const [receivedPayments, refundedPayments] = await Promise.all([
+      Payment.find({
+        provider: providerId,
+        paymentStatus: { $in: ["Completed", "Refunded"] },
+        paymentDate: dateRange,
+      })
+        .populate("renter", "name username")
+        .lean(),
+      Payment.find({
+        provider: providerId,
+        paymentStatus: "Refunded",
+        "refundDetails.refundDate": dateRange,
+      })
+        .populate("renter", "name username")
+        .lean(),
+    ]);
+
+    const paymentIds = [
+      ...new Set(
+        [...receivedPayments, ...refundedPayments].map((payment) =>
+          payment._id.toString()
+        )
+      ),
+    ];
+
+    const bookings = paymentIds.length
+      ? await Booking.find({ payment: { $in: paymentIds } })
+          .select("payment totalPrice status carVariant")
+          .populate({
+            path: "carVariant",
+            select: "car registrationNumber",
+            populate: {
+              path: "car",
+              select: "brand model year category",
+            },
+          })
+          .lean()
+      : [];
+    const bookingsByPayment = new Map(
+      bookings.map((booking) => [booking.payment.toString(), booking])
+    );
+
+    let rentalRevenue = 0;
+    let depositsCollected = 0;
+    let grossCollected = 0;
+    let refunds = 0;
+
+    for (const payment of receivedPayments) {
+      const booking = bookingsByPayment.get(payment._id.toString());
+      const rentalAmount = Math.min(
+        Number(payment.amount) || 0,
+        Number(booking?.totalPrice ?? payment.amount) || 0
+      );
+      rentalRevenue += rentalAmount;
+      grossCollected += Number(payment.amount) || 0;
+      depositsCollected += Math.max(
+        0,
+        (Number(payment.amount) || 0) - rentalAmount
+      );
+    }
+
+    for (const payment of refundedPayments) {
+      refunds += Number(payment.refundDetails?.refundedAmount) || 0;
+    }
+
+    const groupByMonth = range.to - range.from > 45 * 86_400_000;
+    const chart = new Map();
+    const addChartValue = (date, field, amount) => {
+      const key = chartBucket(date, groupByMonth);
+      const point = chart.get(key) ?? {
+        period: key,
+        collected: 0,
+        refunds: 0,
+        net: 0,
+      };
+      point[field] += amount;
+      point.net += field === "refunds" ? -amount : amount;
+      chart.set(key, point);
+    };
+
+    receivedPayments.forEach((payment) =>
+      addChartValue(payment.paymentDate, "collected", Number(payment.amount) || 0)
+    );
+    refundedPayments.forEach((payment) =>
+      addChartValue(
+        payment.refundDetails.refundDate,
+        "refunds",
+        Number(payment.refundDetails.refundedAmount) || 0
+      )
+    );
+
+    const events = [];
+    for (const payment of receivedPayments) {
+      const booking = bookingsByPayment.get(payment._id.toString());
+      events.push({
+        id: `${payment._id}:payment`,
+        type: "Payment",
+        date: payment.paymentDate,
+        amount: roundedMoney(payment.amount),
+        paymentMethod: payment.paymentMethod,
+        renterName:
+          payment.renter?.name ?? payment.renter?.username ?? "Renter",
+        reference: payment.transactionId,
+        ...bookingSummary(booking),
+      });
+    }
+    for (const payment of refundedPayments) {
+      const booking = bookingsByPayment.get(payment._id.toString());
+      events.push({
+        id: `${payment._id}:refund`,
+        type: "Refund",
+        date: payment.refundDetails.refundDate,
+        amount: -roundedMoney(payment.refundDetails.refundedAmount),
+        paymentMethod: payment.paymentMethod,
+        renterName:
+          payment.renter?.name ?? payment.renter?.username ?? "Renter",
+        reference: payment.refundDetails.stripeRefundId ?? payment.transactionId,
+        reason: payment.refundDetails.reason ?? "Refund",
+        ...bookingSummary(booking),
+      });
+    }
+    events.sort((left, right) => new Date(right.date) - new Date(left.date));
+
+    const currencies = new Set(
+      [...receivedPayments, ...refundedPayments].map(
+        (payment) => payment.currency
+      )
+    );
+    const currency = currencies.size === 1 ? [...currencies][0] : "AED";
+
+    return res.status(200).json({
+      providerId,
+      currency,
+      range: {
+        from: range.from,
+        to: range.to,
+        groupBy: groupByMonth ? "month" : "day",
+      },
+      summary: {
+        rentalRevenue: roundedMoney(rentalRevenue),
+        depositsCollected: roundedMoney(depositsCollected),
+        grossCollected: roundedMoney(grossCollected),
+        refunds: roundedMoney(refunds),
+        netEarnings: roundedMoney(grossCollected - refunds),
+        paymentCount: receivedPayments.length,
+        refundCount: refundedPayments.length,
+      },
+      chart: [...chart.values()]
+        .sort((left, right) => left.period.localeCompare(right.period))
+        .map((point) => ({
+          ...point,
+          collected: roundedMoney(point.collected),
+          refunds: roundedMoney(point.refunds),
+          net: roundedMoney(point.net),
+        })),
+      transactions: events.slice(0, transactionLimit),
+    });
+  } catch (error) {
+    console.error("Get provider earnings error:", error);
+    return res.status(500).json({
+      message: "Could not load provider earnings",
+      ...(process.env.NODE_ENV !== "production" && {
+        error: error.message,
+      }),
+    });
+  }
+};

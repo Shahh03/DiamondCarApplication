@@ -1,7 +1,44 @@
+import mongoose from "mongoose";
 import Stripe from "stripe";
 
 import Booking from "../../models/booking.js";
 import CarVariant from "../../models/carVariant.js";
+
+export const getProviderBookings = async (req, res) => {
+  try {
+    const { providerId } = req.params;
+    if (!mongoose.isValidObjectId(providerId)) {
+      return res.status(400).json({ message: "Invalid provider ID" });
+    }
+
+    const variantIds = await CarVariant.find({ provider: providerId })
+      .select("_id")
+      .lean();
+
+    const bookings = await Booking.find({
+      carVariant: { $in: variantIds.map((variant) => variant._id) },
+    })
+      .populate("renter", "name phoneNumber profilePicture")
+      .populate({
+        path: "carVariant",
+        select:
+          "car color registrationNumber rentalPricePerDay " +
+          "depositAmount isAvailable images",
+        populate: { path: "car" },
+      })
+      .populate(
+        "payment",
+        "amount currency paymentMethod paymentStatus paymentDate refundDetails"
+      )
+      .sort({ startDate: 1, createdAt: -1 })
+      .lean();
+
+    return res.status(200).json(bookings);
+  } catch (error) {
+    console.error("Get provider bookings error:", error);
+    return res.status(500).json({ message: "Could not load provider bookings" });
+  }
+};
 
 const stripeClient = () => {
   if (!process.env.STRIPE_SECRET_KEY) {
