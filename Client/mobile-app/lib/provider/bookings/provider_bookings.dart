@@ -6,6 +6,10 @@ import '../provider_data_scope.dart';
 import '../provider_ui.dart';
 import 'provider_booking_details.dart';
 
+const _surface = Colors.white;
+const _success = Color(0xFF059669);
+const _danger = Color(0xFFDC2626);
+
 class ProviderBookingsPage extends StatefulWidget {
   final String providerId;
 
@@ -82,7 +86,7 @@ class _ProviderBookingsPageState extends State<ProviderBookingsPage> {
 
   List<Map<String, dynamic>> _forTab(String tab) {
     final query = _searchController.text.trim().toLowerCase();
-    return _bookings.where((booking) {
+    final filtered = _bookings.where((booking) {
       if (_displayStatus(booking) != tab) return false;
       if (query.isEmpty) return true;
 
@@ -98,7 +102,20 @@ class _ProviderBookingsPageState extends State<ProviderBookingsPage> {
       ].map((value) => value?.toString().toLowerCase() ?? '').join(' ')
           .contains(query);
     }).toList();
+
+    filtered.sort((left, right) {
+      final leftDate = DateTime.tryParse(_raw(left['startDate']));
+      final rightDate = DateTime.tryParse(_raw(right['startDate']));
+      if (leftDate == null || rightDate == null) return 0;
+      return tab == 'Completed' || tab == 'Cancelled'
+          ? rightDate.compareTo(leftDate)
+          : leftDate.compareTo(rightDate);
+    });
+    return filtered;
   }
+
+  int _countForStatus(String status) =>
+      _bookings.where((booking) => _displayStatus(booking) == status).length;
 
   @override
   Widget build(BuildContext context) {
@@ -108,15 +125,12 @@ class _ProviderBookingsPageState extends State<ProviderBookingsPage> {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 18, 16, 14),
-            child: ProviderPageHeader(
-              title: 'Bookings',
-              subtitle: 'Paid bookings are confirmed automatically.',
-              action: IconButton(
-                onPressed: _isLoading ? null : _loadBookings,
-                tooltip: 'Refresh bookings',
-                icon: const Icon(Icons.refresh_rounded),
-              ),
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
+            child: _BookingsHeader(
+              upcoming: _countForStatus('Upcoming'),
+              active: _countForStatus('Active'),
+              isRefreshing: _isLoading && _bookings.isNotEmpty,
+              onRefresh: _loadBookings,
             ),
           ),
           Padding(
@@ -156,7 +170,7 @@ class _ProviderBookingsPageState extends State<ProviderBookingsPage> {
                 final status = _tabs[index];
                 return _StatusFilter(
                   status: status,
-                  count: _forTab(status).length,
+                  count: _countForStatus(status),
                   selected: _selectedStatus == status,
                   onTap: () => setState(() => _selectedStatus = status),
                 );
@@ -172,8 +186,8 @@ class _ProviderBookingsPageState extends State<ProviderBookingsPage> {
                 status: _selectedStatus,
                 bookings: _forTab(_selectedStatus),
                 currency: currency,
-                isLoading: _isLoading,
-                error: _error,
+                isLoading: _isLoading && _bookings.isEmpty,
+                error: _bookings.isEmpty ? _error : null,
                 onRefresh: _loadBookings,
                 onOpen: _openDetails,
               ),
@@ -183,6 +197,64 @@ class _ProviderBookingsPageState extends State<ProviderBookingsPage> {
       ),
     );
   }
+}
+
+class _BookingsHeader extends StatelessWidget {
+  final int upcoming;
+  final int active;
+  final bool isRefreshing;
+  final VoidCallback onRefresh;
+
+  const _BookingsHeader({
+    required this.upcoming,
+    required this.active,
+    required this.isRefreshing,
+    required this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Bookings',
+                  style: TextStyle(
+                    color: providerInk,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$upcoming upcoming · $active active now',
+                  style: const TextStyle(
+                    color: providerMuted,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: isRefreshing ? null : onRefresh,
+            tooltip: 'Refresh bookings',
+            style: IconButton.styleFrom(
+              backgroundColor: _surface,
+              side: const BorderSide(color: providerBorder),
+            ),
+            icon: isRefreshing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      );
 }
 
 class _StatusFilter extends StatelessWidget {
@@ -260,15 +332,16 @@ class _BookingList extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onOpen;
 
   const _BookingList({
-  super.key,
-  required this.status,
-  required this.bookings,
-  required this.currency,
-  required this.isLoading,
-  required this.error,
-  required this.onRefresh,
-  required this.onOpen,
-});
+    super.key,
+    required this.status,
+    required this.bookings,
+    required this.currency,
+    required this.isLoading,
+    required this.error,
+    required this.onRefresh,
+    required this.onOpen,
+  });
+
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
@@ -337,114 +410,107 @@ class _BookingCard extends StatelessWidget {
         .join(' ');
     final paymentCurrency = _raw(payment['currency']).toUpperCase();
 
-    final accent = _statusColor(displayStatus);
+    final amount = _money(
+      paymentCurrency.isEmpty ? currency : paymentCurrency,
+      payment['amount'] ?? booking['totalPrice'],
+    );
+
     return Material(
-      color: Colors.white,
+      color: _surface,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.all(13),
+        child: Ink(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: providerBorder),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x0A0F172A),
-                blurRadius: 14,
-                offset: Offset(0, 5),
-              ),
-            ],
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 4,
-                height: 126,
-                decoration: BoxDecoration(
-                  color: accent,
-                  borderRadius: BorderRadius.circular(8),
+          child: SizedBox(
+            height: 154,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _BookingThumbnail(
+                  imageUrl: images.isEmpty ? '' : images.first,
+                  status: displayStatus,
                 ),
-              ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  children: [
-              Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: Container(
-                      width: 84,
-                      height: 68,
-                      color: const Color(0xFFF1F5F9),
-                      child: images.isEmpty
-                          ? const Icon(
-                              Icons.directions_car_rounded,
-                              color: providerMuted,
-                            )
-                          : Image.network(
-                              images.first,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const Icon(
-                                Icons.broken_image_outlined,
-                                color: providerMuted,
-                              ),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(13, 13, 11, 12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                name.isEmpty ? 'Vehicle' : name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: providerInk,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                            const Icon(
+                              Icons.chevron_right_rounded,
+                              color: providerMuted,
+                              size: 20,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
                         Text(
-                          name.isEmpty ? 'Vehicle' : name,
+                          _value(
+                            variant['registrationNumber'],
+                            'No registration',
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            color: providerInk,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
+                            color: providerMuted,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _raw(variant['registrationNumber']),
-                          style: const TextStyle(color: providerMuted),
+                        const SizedBox(height: 10),
+                        _CompactRow(
+                          icon: Icons.person_outline_rounded,
+                          text: _value(renter['name'], 'Renter'),
                         ),
-                        const SizedBox(height: 6),
-                        _BookingStatusBadge(status: displayStatus),
+                        const SizedBox(height: 7),
+                        _CompactRow(
+                          icon: Icons.date_range_outlined,
+                          text:
+                              '${_shortDate(booking['startDate'])} – ${_shortDate(booking['endDate'])}',
+                        ),
+                        const Spacer(),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                amount,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: providerPrimary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                            _BookingStatusBadge(status: displayStatus),
+                          ],
+                        ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right_rounded, color: providerMuted),
-                ],
-              ),
-              const Divider(height: 24, color: providerBorder),
-              _CompactRow(
-                icon: Icons.person_outline_rounded,
-                text: _value(renter['name'], 'Renter'),
-              ),
-              const SizedBox(height: 9),
-              _CompactRow(
-                icon: Icons.date_range_outlined,
-                text:
-                    '${_date(booking['startDate'])} – ${_date(booking['endDate'])}',
-              ),
-              const SizedBox(height: 9),
-              _CompactRow(
-                icon: Icons.payments_outlined,
-                text: _money(
-                  paymentCurrency.isEmpty ? currency : paymentCurrency,
-                  payment['amount'] ?? booking['totalPrice'],
                 ),
-              ),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -452,45 +518,105 @@ class _BookingCard extends StatelessWidget {
   }
 }
 
+class _BookingThumbnail extends StatelessWidget {
+  final String imageUrl;
+  final String status;
+
+  const _BookingThumbnail({required this.imageUrl, required this.status});
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 112,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ClipRRect(
+              borderRadius: const BorderRadius.horizontal(
+                left: Radius.circular(19),
+              ),
+              child: imageUrl.isEmpty
+                  ? const ColoredBox(
+                      color: Color(0xFFF1F5F9),
+                      child: Icon(
+                        Icons.directions_car_rounded,
+                        size: 38,
+                        color: providerMuted,
+                      ),
+                    )
+                  : Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (_, child, progress) => progress == null
+                          ? child
+                          : const ColoredBox(
+                              color: Color(0xFFF1F5F9),
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            ),
+                      errorBuilder: (_, __, ___) => const ColoredBox(
+                        color: Color(0xFFF1F5F9),
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          color: providerMuted,
+                        ),
+                      ),
+                    ),
+            ),
+            Positioned(
+              left: 9,
+              bottom: 9,
+              child: Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: _statusColor(status),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _surface, width: 2),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
 class _BookingSkeleton extends StatelessWidget {
   const _BookingSkeleton();
 
   @override
   Widget build(BuildContext context) => Container(
-        height: 188,
+        height: 154,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: providerBorder),
         ),
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Row(
-              children: [
-                _block(width: 84, height: 68, radius: 14),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _block(width: double.infinity, height: 16),
-                      const SizedBox(height: 9),
-                      _block(width: 100, height: 12),
-                      const SizedBox(height: 9),
-                      _block(width: 70, height: 20, radius: 10),
-                    ],
-                  ),
+            _block(width: 112, height: double.infinity, radius: 19),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(0, 14, 13, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _block(width: double.infinity, height: 15),
+                    const SizedBox(height: 8),
+                    _block(width: 90, height: 10),
+                    const SizedBox(height: 15),
+                    _block(width: 130, height: 11),
+                    const SizedBox(height: 9),
+                    _block(width: 160, height: 11),
+                    const Spacer(),
+                    _block(width: 105, height: 14),
+                  ],
                 ),
-              ],
+              ),
             ),
-            const SizedBox(height: 18),
-            _block(width: double.infinity, height: 12),
-            const SizedBox(height: 10),
-            _block(width: 220, height: 12),
-            const SizedBox(height: 10),
-            _block(width: 130, height: 12),
           ],
         ),
       );
@@ -523,8 +649,11 @@ class _CompactRow extends StatelessWidget {
           Expanded(
             child: Text(
               text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: providerInk,
+                fontSize: 11,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -557,9 +686,9 @@ class _BookingStatusBadge extends StatelessWidget {
 
 Color _statusColor(String status) => switch (status) {
       'Upcoming' => const Color(0xFF2563EB),
-      'Active' => const Color(0xFF059669),
+      'Active' => _success,
       'Completed' => const Color(0xFF64748B),
-      'Cancelled' => const Color(0xFFDC2626),
+      'Cancelled' => _danger,
       _ => providerPrimary,
     };
 
@@ -599,9 +728,9 @@ String _value(dynamic value, String fallback) {
   return text.isEmpty ? fallback : text;
 }
 
-String _date(dynamic value) {
+String _shortDate(dynamic value) {
   final date = DateTime.tryParse(_raw(value))?.toLocal();
-  return date == null ? 'Unknown date' : DateFormat.yMMMd().format(date);
+  return date == null ? 'Unknown' : DateFormat('d MMM').format(date);
 }
 
 String _money(String currency, dynamic value) {

@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../provider_data_scope.dart';
 import '../provider_ui.dart';
+
+const _surface = Colors.white;
+const _softBlue = Color(0xFFEFF6FF);
+const _success = Color(0xFF059669);
+const _danger = Color(0xFFDC2626);
+const _orange = Color(0xFFEA580C);
 
 class ProviderBookingDetailsPage extends StatelessWidget {
   final Map<String, dynamic> booking;
@@ -11,6 +18,15 @@ class ProviderBookingDetailsPage extends StatelessWidget {
     super.key,
     required this.booking,
   });
+
+  Future<void> _copyReference(BuildContext context, String reference) async {
+    if (reference.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: reference));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Booking reference copied')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,151 +37,484 @@ class ProviderBookingDetailsPage extends StatelessWidget {
     final images = _strings(variant['images']);
     final fallbackCurrency = ProviderDataScope.of(context).currency;
     final paymentCurrency = _raw(payment['currency']).toUpperCase();
-    final currency = paymentCurrency.isEmpty ? fallbackCurrency : paymentCurrency;
+    final currency = paymentCurrency.isEmpty
+        ? fallbackCurrency
+        : paymentCurrency;
+    final status = _displayStatus(booking);
     final carName = [_raw(car['brand']), _raw(car['model'])]
         .where((value) => value.isNotEmpty)
         .join(' ');
+    final reference = _raw(booking['_id']);
 
     return Scaffold(
       backgroundColor: providerBackground,
       appBar: AppBar(
-        title: const Text('Booking details'),
+        title: const Text(
+          'Booking details',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
         backgroundColor: providerBackground,
+        surfaceTintColor: Colors.transparent,
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(22),
-            child: AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Container(
-                color: const Color(0xFFE2E8F0),
-                child: images.isEmpty
-                    ? const Icon(
-                        Icons.directions_car_rounded,
-                        size: 64,
-                        color: providerMuted,
-                      )
-                    : Image.network(
-                        images.first,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(
-                          Icons.broken_image_outlined,
-                          size: 48,
-                          color: providerMuted,
-                        ),
+          _BookingHero(
+            imageUrl: images.isEmpty ? '' : images.first,
+            status: status,
+          ),
+          const SizedBox(height: 17),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      carName.isEmpty ? 'Vehicle' : carName,
+                      style: const TextStyle(
+                        color: providerInk,
+                        fontSize: 24,
+                        height: 1.1,
+                        fontWeight: FontWeight.w900,
                       ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      [
+                        _raw(car['year']),
+                        _raw(car['category']),
+                        _raw(variant['registrationNumber']),
+                      ].where((value) => value.isNotEmpty).join(' · '),
+                      style: const TextStyle(
+                        color: providerMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (reference.isNotEmpty) ...[
+                const SizedBox(width: 10),
+                IconButton(
+                  onPressed: () => _copyReference(context, reference),
+                  tooltip: 'Copy booking reference',
+                  style: IconButton.styleFrom(
+                    backgroundColor: _surface,
+                    side: const BorderSide(color: providerBorder),
+                  ),
+                  icon: const Icon(Icons.content_copy_rounded, size: 19),
+                ),
+              ],
+            ],
+          ),
+          if (reference.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Booking #${_shortReference(reference)}',
+              style: const TextStyle(
+                color: providerMuted,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+          const SizedBox(height: 22),
+          const _SectionTitle(
+            eyebrow: 'SCHEDULE',
+            title: 'Rental period',
+          ),
+          const SizedBox(height: 11),
+          _TripTimeline(
+            startDate: booking['startDate'],
+            endDate: booking['endDate'],
+          ),
+          const SizedBox(height: 22),
+          const _SectionTitle(
+            eyebrow: 'CUSTOMER',
+            title: 'Renter details',
+          ),
+          const SizedBox(height: 11),
+          _RenterCard(renter: renter),
+          const SizedBox(height: 22),
+          const _SectionTitle(
+            eyebrow: 'TRANSACTION',
+            title: 'Payment',
+          ),
+          const SizedBox(height: 11),
+          _PaymentPanel(
+            currency: currency,
+            amount: payment['amount'] ?? booking['totalPrice'],
+            payment: payment,
+          ),
+          const SizedBox(height: 18),
+          const _PortalNotice(),
+        ],
+      ),
+    );
+  }
+}
+
+class _BookingHero extends StatelessWidget {
+  final String imageUrl;
+  final String status;
+
+  const _BookingHero({required this.imageUrl, required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final caption = switch (status) {
+      'Cancelled' => 'This booking has been cancelled',
+      'Completed' => 'Rental completed',
+      'Active' => 'Rental currently in progress',
+      _ => 'Paid booking confirmed',
+    };
+
+    return ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: AspectRatio(
+          aspectRatio: 16 / 10,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (imageUrl.isEmpty)
+                const ColoredBox(
+                  color: Color(0xFFE2E8F0),
+                  child: Icon(
+                    Icons.directions_car_rounded,
+                    size: 72,
+                    color: providerMuted,
+                  ),
+                )
+              else
+                Image.network(
+                  imageUrl,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (_, child, progress) => progress == null
+                      ? child
+                      : const ColoredBox(
+                          color: Color(0xFFE2E8F0),
+                          child: Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                  errorBuilder: (_, __, ___) => const ColoredBox(
+                    color: Color(0xFFE2E8F0),
+                    child: Icon(
+                      Icons.broken_image_outlined,
+                      size: 48,
+                      color: providerMuted,
+                    ),
+                  ),
+                ),
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Color(0x66000000)],
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 12,
+                top: 12,
+                child: _StatusBadge(status: status),
+              ),
+              Positioned(
+                left: 14,
+                bottom: 13,
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.lock_rounded,
+                      size: 14,
+                      color: Colors.white,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      caption,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final String status;
+
+  const _StatusBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _statusColor(status);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x26000000),
+            blurRadius: 8,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            status,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  final String eyebrow;
+  final String title;
+
+  const _SectionTitle({required this.eyebrow, required this.title});
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            eyebrow,
+            style: const TextStyle(
+              color: providerPrimary,
+              fontSize: 9,
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            title,
+            style: const TextStyle(
+              color: providerInk,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      );
+}
+
+class _TripTimeline extends StatelessWidget {
+  final dynamic startDate;
+  final dynamic endDate;
+
+  const _TripTimeline({required this.startDate, required this.endDate});
+
+  @override
+  Widget build(BuildContext context) {
+    final days = _rentalDays(startDate, endDate);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: providerBorder),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _DateStop(
+              icon: Icons.key_rounded,
+              label: 'PICKUP',
+              date: _date(startDate),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Column(
+              children: [
+                const Icon(
+                  Icons.arrow_forward_rounded,
+                  color: providerPrimary,
+                  size: 19,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$days day${days == 1 ? '' : 's'}',
+                  style: const TextStyle(
+                    color: providerMuted,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _DateStop(
+              icon: Icons.flag_outlined,
+              label: 'RETURN',
+              date: _date(endDate),
+              alignEnd: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DateStop extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String date;
+  final bool alignEnd;
+
+  const _DateStop({
+    required this.icon,
+    required this.label,
+    required this.date,
+    this.alignEnd = false,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment:
+            alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: _softBlue,
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(icon, color: providerPrimary, size: 18),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            label,
+            style: const TextStyle(
+              color: providerMuted,
+              fontSize: 8,
+              letterSpacing: 0.8,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            date,
+            textAlign: alignEnd ? TextAlign.end : TextAlign.start,
+            style: const TextStyle(
+              color: providerInk,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      );
+}
+
+class _RenterCard extends StatelessWidget {
+  final Map<String, dynamic> renter;
+
+  const _RenterCard({required this.renter});
+
+  @override
+  Widget build(BuildContext context) {
+    final name = _value(renter['name']);
+    final phone = _value(renter['phoneNumber']);
+    final initial = name == 'Not provided' || name.isEmpty
+        ? 'R'
+        : name.substring(0, 1).toUpperCase();
+
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: providerBorder),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              color: _softBlue,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              initial,
+              style: const TextStyle(
+                color: providerPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  carName.isEmpty ? 'Vehicle' : carName,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: providerInk,
-                    fontSize: 22,
+                    fontSize: 15,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-              ),
-              _Status(status: _displayStatus(booking)),
-            ],
-          ),
-          const SizedBox(height: 5),
-          Text(
-            _value(variant['registrationNumber']),
-            style: const TextStyle(color: providerMuted),
-          ),
-          const SizedBox(height: 18),
-          _Section(
-            title: 'Rental period',
-            children: [
-              _Row(
-                icon: Icons.login_rounded,
-                label: 'Pickup',
-                value: _date(booking['startDate']),
-              ),
-              _Row(
-                icon: Icons.logout_rounded,
-                label: 'Return',
-                value: _date(booking['endDate']),
-                divider: false,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          _Section(
-            title: 'Renter',
-            children: [
-              _Row(
-                icon: Icons.person_outline_rounded,
-                label: 'Name',
-                value: _value(renter['name']),
-              ),
-              _Row(
-                icon: Icons.phone_outlined,
-                label: 'Phone',
-                value: _value(renter['phoneNumber']),
-                divider: false,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          _Section(
-            title: 'Payment',
-            children: [
-              _Row(
-                icon: Icons.payments_outlined,
-                label: 'Amount',
-                value: _money(
-                  currency,
-                  payment['amount'] ?? booking['totalPrice'],
-                ),
-              ),
-              _Row(
-                icon: Icons.verified_outlined,
-                label: 'Payment status',
-                value: _value(payment['paymentStatus']),
-              ),
-              _Row(
-                icon: Icons.credit_card_outlined,
-                label: 'Payment method',
-                value: _value(payment['paymentMethod']),
-              ),
-              _Row(
-                icon: Icons.event_available_outlined,
-                label: 'Payment date',
-                value: _date(payment['paymentDate']),
-                divider: false,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFBFDBFE)),
-            ),
-            child: const Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.info_outline_rounded, color: providerPrimary),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Bookings are confirmed automatically after successful payment. Booking management and refunds remain in the private management portal.',
-                    style: TextStyle(
-                      color: providerPrimaryDark,
-                      height: 1.4,
-                      fontWeight: FontWeight.w600,
+                const SizedBox(height: 5),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.phone_outlined,
+                      color: providerMuted,
+                      size: 15,
                     ),
-                  ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        phone,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: providerMuted,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -176,110 +525,200 @@ class ProviderBookingDetailsPage extends StatelessWidget {
   }
 }
 
-class _Section extends StatelessWidget {
-  final String title;
-  final List<Widget> children;
+class _PaymentPanel extends StatelessWidget {
+  final String currency;
+  final dynamic amount;
+  final Map<String, dynamic> payment;
 
-  const _Section({required this.title, required this.children});
+  const _PaymentPanel({
+    required this.currency,
+    required this.amount,
+    required this.payment,
+  });
 
   @override
-  Widget build(BuildContext context) => ProviderSectionCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) {
+    final paymentStatus = _value(payment['paymentStatus']);
+    final statusColor = switch (paymentStatus) {
+      'Completed' => _success,
+      'Refunded' => _orange,
+      'Failed' => _danger,
+      _ => providerMuted,
+    };
+
+    return Container(
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: providerBorder),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [providerPrimaryDark, providerPrimary],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(19)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'BOOKING TOTAL',
+                  style: TextStyle(
+                    color: Color(0xFFBFDBFE),
+                    fontSize: 9,
+                    letterSpacing: 1,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  _money(currency, amount),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _PaymentRow(
+            icon: Icons.verified_outlined,
+            label: 'Payment status',
+            value: paymentStatus,
+            valueColor: statusColor,
+          ),
+          const Divider(height: 1, indent: 52, color: providerBorder),
+          _PaymentRow(
+            icon: Icons.credit_card_outlined,
+            label: 'Method',
+            value: _value(payment['paymentMethod']),
+          ),
+          const Divider(height: 1, indent: 52, color: providerBorder),
+          _PaymentRow(
+            icon: Icons.event_available_outlined,
+            label: 'Paid on',
+            value: _date(payment['paymentDate']),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  const _PaymentRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        child: Row(
           children: [
-            Text(
-              title,
-              style: const TextStyle(
-                color: providerInk,
-                fontSize: 17,
-                fontWeight: FontWeight.w900,
+            Icon(icon, color: providerPrimary, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(color: providerMuted, fontSize: 11),
               ),
             ),
-            const SizedBox(height: 8),
-            ...children,
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.end,
+                style: TextStyle(
+                  color: valueColor ?? providerInk,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
           ],
         ),
       );
 }
 
-class _Row extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final bool divider;
-
-  const _Row({
-    required this.icon,
-    required this.label,
-    required this.value,
-    this.divider = true,
-  });
+class _PortalNotice extends StatelessWidget {
+  const _PortalNotice();
 
   @override
-  Widget build(BuildContext context) => Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Row(
-              children: [
-                Icon(icon, color: providerPrimary, size: 21),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(label, style: const TextStyle(color: providerMuted)),
-                ),
-                const SizedBox(width: 12),
-                Flexible(
-                  child: Text(
-                    value,
-                    textAlign: TextAlign.end,
-                    style: const TextStyle(
-                      color: providerInk,
-                      fontWeight: FontWeight.w800,
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _softBlue,
+          borderRadius: BorderRadius.circular(17),
+          border: Border.all(color: const Color(0xFFBFDBFE)),
+        ),
+        child: const Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.admin_panel_settings_outlined, color: providerPrimary),
+            SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Managed in the web portal',
+                    style: TextStyle(
+                      color: providerPrimaryDark,
+                      fontWeight: FontWeight.w900,
                     ),
                   ),
-                ),
-              ],
+                  SizedBox(height: 3),
+                  Text(
+                    'Use the private management portal for booking administration and refund actions.',
+                    style: TextStyle(
+                      color: providerPrimaryDark,
+                      fontSize: 11,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          if (divider) const Divider(height: 1, color: providerBorder),
-        ],
+          ],
+        ),
       );
 }
 
-class _Status extends StatelessWidget {
-  final String status;
-
-  const _Status({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = switch (status) {
-      'Active' => const Color(0xFF059669),
+Color _statusColor(String status) => switch (status) {
+      'Active' => _success,
       'Upcoming' => providerPrimary,
       'Completed' => providerMuted,
-      _ => const Color(0xFFDC2626),
+      'Cancelled' => _danger,
+      _ => _orange,
     };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.10),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        status,
-        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w800),
-      ),
-    );
-  }
-}
 
 String _displayStatus(Map<String, dynamic> booking) {
   final stored = _raw(booking['status']);
   if (stored == 'Cancelled') return 'Cancelled';
   if (stored == 'Completed') return 'Completed';
+
   final start = DateTime.tryParse(_raw(booking['startDate']))?.toLocal();
   final end = DateTime.tryParse(_raw(booking['endDate']))?.toLocal();
   if (start == null || end == null) return 'Upcoming';
+
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
   final startDay = DateTime(start.year, start.month, start.day);
@@ -287,6 +726,14 @@ String _displayStatus(Map<String, dynamic> booking) {
   if (startDay.isAfter(today)) return 'Upcoming';
   if (endDay.isBefore(today)) return 'Completed';
   return 'Active';
+}
+
+int _rentalDays(dynamic startValue, dynamic endValue) {
+  final start = DateTime.tryParse(_raw(startValue));
+  final end = DateTime.tryParse(_raw(endValue));
+  if (start == null || end == null) return 0;
+  final difference = end.difference(start).inDays;
+  return difference < 1 ? 1 : difference;
 }
 
 Map<String, dynamic> _map(dynamic value) => value is Map
@@ -307,6 +754,9 @@ String _value(dynamic value) {
   return text.isEmpty ? 'Not provided' : text;
 }
 
+String _shortReference(String value) =>
+    value.length <= 8 ? value.toUpperCase() : value.substring(value.length - 8).toUpperCase();
+
 String _date(dynamic value) {
   final date = DateTime.tryParse(_raw(value))?.toLocal();
   return date == null ? 'Not provided' : DateFormat.yMMMd().format(date);
@@ -316,5 +766,5 @@ String _money(String currency, dynamic value) {
   final amount = value is num
       ? value
       : num.tryParse(value?.toString() ?? '') ?? 0;
-  return '$currency ${NumberFormat.decimalPattern().format(amount)}';
+  return '$currency ${NumberFormat('#,##0.##').format(amount)}';
 }

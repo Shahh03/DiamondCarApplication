@@ -4,6 +4,12 @@ import 'package:intl/intl.dart';
 import '../provider_data_scope.dart';
 import '../provider_ui.dart';
 
+const _surface = Colors.white;
+const _softBlue = Color(0xFFEFF6FF);
+const _success = Color(0xFF059669);
+const _orange = Color(0xFFEA580C);
+const _danger = Color(0xFFDC2626);
+
 class ProviderCarDetailsPage extends StatefulWidget {
   final Map<String, dynamic> variant;
 
@@ -20,23 +26,45 @@ class ProviderCarDetailsPage extends StatefulWidget {
 class _ProviderCarDetailsPageState extends State<ProviderCarDetailsPage> {
   int _photoIndex = 0;
 
+  void _openGallery(List<String> images) {
+    if (images.isEmpty) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _FullScreenGallery(
+          images: images,
+          initialIndex: _photoIndex,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final variant = widget.variant;
-    final car = _map(variant['car']);
-    final insurance = _map(variant['insuranceDetails']);
+    final car = _asMap(variant['car']);
+    final insurance = _asMap(variant['insuranceDetails']);
     final images = _images(variant['images']);
     final currency = ProviderDataScope.of(context).currency;
-    final isAvailable = variant['isAvailable'] == true;
+    final available = variant['isAvailable'] == true;
     final name = [_raw(car['brand']), _raw(car['model'])]
         .where((value) => value.isNotEmpty)
         .join(' ');
+    final subtitle = [
+      _raw(car['year']),
+      _raw(car['category']),
+      _raw(variant['registrationNumber']),
+    ].where((value) => value.isNotEmpty).join(' · ');
 
     return Scaffold(
       backgroundColor: providerBackground,
       appBar: AppBar(
-        title: const Text('Vehicle details'),
+        title: const Text(
+          'Vehicle details',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+        centerTitle: false,
         backgroundColor: providerBackground,
+        surfaceTintColor: Colors.transparent,
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
@@ -44,9 +72,11 @@ class _ProviderCarDetailsPageState extends State<ProviderCarDetailsPage> {
           _PhotoGallery(
             images: images,
             index: _photoIndex,
+            available: available,
             onChanged: (index) => setState(() => _photoIndex = index),
+            onTap: () => _openGallery(images),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 17),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -58,327 +88,248 @@ class _ProviderCarDetailsPageState extends State<ProviderCarDetailsPage> {
                       name.isEmpty ? 'Unnamed vehicle' : name,
                       style: const TextStyle(
                         color: providerInk,
-                        fontSize: 23,
+                        fontSize: 24,
+                        height: 1.1,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      [_raw(car['year']), _raw(car['category'])]
-                          .where((value) => value.isNotEmpty)
-                          .join(' • '),
-                      style: const TextStyle(
-                        color: providerMuted,
-                        fontWeight: FontWeight.w600,
+                    if (subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        subtitle,
+                        style: const TextStyle(
+                          color: providerMuted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
-              _StatusBadge(isAvailable: isAvailable),
+              const SizedBox(width: 10),
+              _StatusBadge(available: available),
             ],
           ),
           const SizedBox(height: 18),
-          ProviderSectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _SectionTitle('Pricing'),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _Price(
-                        label: 'Per day',
-                        value: _money(
-                          currency,
-                          variant['rentalPricePerDay'],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _Price(
-                        label: 'Deposit',
-                        value: _money(currency, variant['depositAmount']),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+          _PricingPanel(
+            dailyRate: _money(currency, variant['rentalPricePerDay']),
+            deposit: _money(currency, variant['depositAmount']),
           ),
-          const SizedBox(height: 14),
-          ProviderSectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _SectionTitle('Vehicle information'),
-                const SizedBox(height: 8),
-                _DetailRow(
-                  icon: Icons.pin_outlined,
-                  label: 'Registration',
-                  value: _text(variant['registrationNumber']),
-                ),
-                _DetailRow(
-                  icon: Icons.palette_outlined,
-                  label: 'Color',
-                  value: _text(variant['color']),
-                ),
-                _DetailRow(
-                  icon: Icons.settings_outlined,
-                  label: 'Transmission',
-                  value: _text(car['transmission']),
-                ),
-                _DetailRow(
-                  icon: Icons.local_gas_station_outlined,
-                  label: 'Fuel type',
-                  value: _text(car['fuelType']),
-                ),
-                _DetailRow(
-                  icon: Icons.airline_seat_recline_normal_rounded,
-                  label: 'Seats',
-                  value: _text(car['seats']),
-                  showDivider: false,
-                ),
-              ],
-            ),
+          const SizedBox(height: 22),
+          const _SectionHeading(
+            eyebrow: 'SPECIFICATIONS',
+            title: 'Vehicle information',
           ),
-          const SizedBox(height: 14),
-          ProviderSectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _SectionTitle('Insurance'),
-                const SizedBox(height: 8),
-                _DetailRow(
-                  icon: Icons.business_outlined,
-                  label: 'Company',
-                  value: _text(insurance['insuranceCompany']),
-                ),
-                _DetailRow(
-                  icon: Icons.description_outlined,
-                  label: 'Policy number',
-                  value: _text(insurance['policyNumber']),
-                ),
-                _DetailRow(
-                  icon: Icons.event_outlined,
-                  label: 'Expiry date',
-                  value: _date(insurance['expiryDate']),
-                  showDivider: false,
-                ),
-              ],
-            ),
+          const SizedBox(height: 11),
+          _SpecificationsGrid(
+            items: [
+              _Specification(
+                icon: Icons.palette_outlined,
+                label: 'Color',
+                value: _display(variant['color']),
+              ),
+              _Specification(
+                icon: Icons.settings_outlined,
+                label: 'Transmission',
+                value: _display(car['transmission']),
+              ),
+              _Specification(
+                icon: Icons.local_gas_station_outlined,
+                label: 'Fuel type',
+                value: _display(car['fuelType']),
+              ),
+              _Specification(
+                icon: Icons.airline_seat_recline_normal_rounded,
+                label: 'Seats',
+                value: _display(car['seats']),
+              ),
+            ],
           ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFBFDBFE)),
-            ),
-            child: const Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.info_outline_rounded, color: providerPrimary),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'To edit pricing, photos, insurance or availability, use the DiamondCar management portal.',
-                    style: TextStyle(
-                      color: providerPrimaryDark,
-                      height: 1.4,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          const SizedBox(height: 22),
+          const _SectionHeading(
+            eyebrow: 'PROTECTION',
+            title: 'Insurance',
           ),
+          const SizedBox(height: 11),
+          _InsurancePanel(insurance: insurance),
+          const SizedBox(height: 18),
+          const _PortalNotice(),
         ],
       ),
     );
-  }
-
-  static Map<String, dynamic> _map(dynamic value) => value is Map
-      ? Map<String, dynamic>.from(value)
-      : <String, dynamic>{};
-
-  static String _text(dynamic value) {
-    final text = _raw(value);
-    return text.isEmpty ? 'Not provided' : text;
-  }
-
-  static String _raw(dynamic value) => value?.toString().trim() ?? '';
-
-  static List<String> _images(dynamic value) => value is List
-      ? value
-          .map((item) => item?.toString().trim() ?? '')
-          .where((item) => item.isNotEmpty)
-          .toList()
-      : <String>[];
-
-  static String _money(String currency, dynamic value) {
-    final number = value is num
-        ? value
-        : num.tryParse(value?.toString() ?? '') ?? 0;
-    return '$currency ${NumberFormat.decimalPattern().format(number)}';
-  }
-
-  static String _date(dynamic value) {
-    final parsed = DateTime.tryParse(value?.toString() ?? '');
-    return parsed == null ? 'Not provided' : DateFormat.yMMMd().format(parsed);
   }
 }
 
 class _PhotoGallery extends StatelessWidget {
   final List<String> images;
   final int index;
+  final bool available;
   final ValueChanged<int> onChanged;
+  final VoidCallback onTap;
 
   const _PhotoGallery({
     required this.images,
     required this.index,
+    required this.available,
     required this.onChanged,
+    required this.onTap,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: AspectRatio(
-        aspectRatio: 16 / 10,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (images.isEmpty)
-              const ColoredBox(
-                color: Color(0xFFE2E8F0),
-                child: Icon(
-                  Icons.directions_car_rounded,
-                  size: 72,
-                  color: providerMuted,
-                ),
-              )
-            else
-              PageView.builder(
-                itemCount: images.length,
-                onPageChanged: onChanged,
-                itemBuilder: (_, imageIndex) => Image.network(
-                  images[imageIndex],
-                  fit: BoxFit.cover,
-                  loadingBuilder: (_, child, progress) => progress == null
-                      ? child
-                      : const ColoredBox(
-                          color: Color(0xFFE2E8F0),
-                          child: Center(child: CircularProgressIndicator()),
+  Widget build(BuildContext context) => ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: AspectRatio(
+          aspectRatio: 16 / 10,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (images.isEmpty)
+                const ColoredBox(
+                  color: Color(0xFFE2E8F0),
+                  child: Icon(
+                    Icons.directions_car_rounded,
+                    size: 72,
+                    color: providerMuted,
+                  ),
+                )
+              else
+                GestureDetector(
+                  onTap: onTap,
+                  child: PageView.builder(
+                    itemCount: images.length,
+                    onPageChanged: onChanged,
+                    itemBuilder: (_, imageIndex) => Image.network(
+                      images[imageIndex],
+                      fit: BoxFit.cover,
+                      loadingBuilder: (_, child, progress) => progress == null
+                          ? child
+                          : const ColoredBox(
+                              color: Color(0xFFE2E8F0),
+                              child: Center(
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            ),
+                      errorBuilder: (_, __, ___) => const ColoredBox(
+                        color: Color(0xFFE2E8F0),
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          size: 48,
+                          color: providerMuted,
                         ),
-                  errorBuilder: (_, __, ___) => const ColoredBox(
-                    color: Color(0xFFE2E8F0),
-                    child: Icon(Icons.broken_image_outlined, size: 48),
-                  ),
-                ),
-              ),
-            if (images.length > 1)
-              Positioned(
-                right: 12,
-                bottom: 12,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.65),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    '${index + 1}/${images.length}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                 ),
+              Positioned(
+                left: 12,
+                top: 12,
+                child: _StatusBadge(available: available, onDark: true),
               ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  final bool isAvailable;
-
-  const _StatusBadge({required this.isAvailable});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: isAvailable
-            ? const Color(0xFFD1FAE5)
-            : const Color(0xFFFFEDD5),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        isAvailable ? 'Available' : 'Unavailable',
-        style: TextStyle(
-          color: isAvailable
-              ? const Color(0xFF047857)
-              : const Color(0xFFC2410C),
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  final String text;
-
-  const _SectionTitle(this.text);
-
-  @override
-  Widget build(BuildContext context) => Text(
-        text,
-        style: const TextStyle(
-          color: providerInk,
-          fontSize: 17,
-          fontWeight: FontWeight.w900,
+              if (images.isNotEmpty)
+                Positioned(
+                  right: 12,
+                  top: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.58),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.fullscreen_rounded,
+                          color: Colors.white,
+                          size: 15,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${index + 1}/${images.length}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              if (images.length > 1)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 12,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(
+                      images.length > 8 ? 8 : images.length,
+                      (dotIndex) => AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        width: dotIndex == index ? 17 : 6,
+                        height: 6,
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        decoration: BoxDecoration(
+                          color: dotIndex == index
+                              ? Colors.white
+                              : Colors.white.withOpacity(0.55),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       );
 }
 
-class _Price extends StatelessWidget {
-  final String label;
-  final String value;
+class _StatusBadge extends StatelessWidget {
+  final bool available;
+  final bool onDark;
 
-  const _Price({required this.label, required this.value});
+  const _StatusBadge({required this.available, this.onDark = false});
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: providerBorder),
+          color: available
+              ? const Color(0xFFECFDF5)
+              : const Color(0xFFFFF7ED),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: onDark
+              ? const [
+                  BoxShadow(
+                    color: Color(0x26000000),
+                    blurRadius: 8,
+                    offset: Offset(0, 3),
+                  ),
+                ]
+              : null,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(label, style: const TextStyle(color: providerMuted)),
-            const SizedBox(height: 4),
+            Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(
+                color: available ? _success : _orange,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 5),
             Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: providerInk,
+              available ? 'Available' : 'Unavailable',
+              style: TextStyle(
+                color: available ? _success : _orange,
+                fontSize: 10,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -387,49 +338,477 @@ class _Price extends StatelessWidget {
       );
 }
 
-class _DetailRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final bool showDivider;
+class _PricingPanel extends StatelessWidget {
+  final String dailyRate;
+  final String deposit;
 
-  const _DetailRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    this.showDivider = true,
-  });
+  const _PricingPanel({required this.dailyRate, required this.deposit});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(17),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF0F2D68), providerPrimary],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x202563EB),
+              blurRadius: 20,
+              offset: Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Daily rental rate',
+                    style: TextStyle(
+                      color: Color(0xFFBFDBFE),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      dailyRate,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 23,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const Text(
+                    'per day',
+                    style: TextStyle(color: Color(0xFF93C5FD), fontSize: 10),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              width: 1,
+              height: 55,
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              color: Colors.white.withOpacity(0.18),
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Refundable deposit',
+                    style: TextStyle(
+                      color: Color(0xFFBFDBFE),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      deposit,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const Text(
+                    'held during rental',
+                    style: TextStyle(color: Color(0xFF93C5FD), fontSize: 9),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _SectionHeading extends StatelessWidget {
+  final String eyebrow;
+  final String title;
+
+  const _SectionHeading({required this.eyebrow, required this.title});
 
   @override
   Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
+          Text(
+            eyebrow,
+            style: const TextStyle(
+              color: providerPrimary,
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            title,
+            style: const TextStyle(
+              color: providerInk,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      );
+}
+
+class _Specification {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _Specification({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+}
+
+class _SpecificationsGrid extends StatelessWidget {
+  final List<_Specification> items;
+
+  const _SpecificationsGrid({required this.items});
+
+  @override
+  Widget build(BuildContext context) => GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: items.length,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          childAspectRatio: 2.35,
+        ),
+        itemBuilder: (_, index) {
+          final item = items[index];
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: _surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: providerBorder),
+            ),
             child: Row(
               children: [
-                Icon(icon, color: providerPrimary, size: 21),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: const TextStyle(color: providerMuted),
+                Container(
+                  width: 35,
+                  height: 35,
+                  decoration: BoxDecoration(
+                    color: _softBlue,
+                    borderRadius: BorderRadius.circular(11),
                   ),
+                  child: Icon(item.icon, color: providerPrimary, size: 18),
                 ),
-                const SizedBox(width: 12),
-                Flexible(
-                  child: Text(
-                    value,
-                    textAlign: TextAlign.end,
-                    style: const TextStyle(
-                      color: providerInk,
-                      fontWeight: FontWeight.w800,
-                    ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.label,
+                        maxLines: 1,
+                        style: const TextStyle(
+                          color: providerMuted,
+                          fontSize: 9,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        item.value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: providerInk,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
-          if (showDivider) const Divider(height: 1, color: providerBorder),
-        ],
+          );
+        },
       );
+}
+
+class _InsurancePanel extends StatelessWidget {
+  final Map<String, dynamic> insurance;
+
+  const _InsurancePanel({required this.insurance});
+
+  @override
+  Widget build(BuildContext context) {
+    final expiry = DateTime.tryParse(insurance['expiryDate']?.toString() ?? '');
+    final expired = expiry != null && expiry.isBefore(DateTime.now());
+
+    return Container(
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: expired ? const Color(0xFFFCA5A5) : providerBorder,
+        ),
+      ),
+      child: Column(
+        children: [
+          _InsuranceRow(
+            icon: Icons.business_outlined,
+            label: 'Insurance company',
+            value: _display(insurance['insuranceCompany']),
+          ),
+          const Divider(height: 1, indent: 56, color: providerBorder),
+          _InsuranceRow(
+            icon: Icons.description_outlined,
+            label: 'Policy number',
+            value: _display(insurance['policyNumber']),
+          ),
+          const Divider(height: 1, indent: 56, color: providerBorder),
+          _InsuranceRow(
+            icon: Icons.event_outlined,
+            label: 'Expiry date',
+            value: _date(insurance['expiryDate']),
+            warning: expired,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InsuranceRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool warning;
+
+  const _InsuranceRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.warning = false,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: warning ? const Color(0xFFFEF2F2) : _softBlue,
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(
+                icon,
+                size: 18,
+                color: warning ? _danger : providerPrimary,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: providerMuted,
+                      fontSize: 9,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: warning ? _danger : providerInk,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (warning)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  'Expired',
+                  style: TextStyle(
+                    color: _danger,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+}
+
+class _PortalNotice extends StatelessWidget {
+  const _PortalNotice();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _softBlue,
+          borderRadius: BorderRadius.circular(17),
+          border: Border.all(color: const Color(0xFFBFDBFE)),
+        ),
+        child: const Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.admin_panel_settings_outlined, color: providerPrimary),
+            SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Managed in the web portal',
+                    style: TextStyle(
+                      color: providerPrimaryDark,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  SizedBox(height: 3),
+                  Text(
+                    'Use the DiamondCar management portal to change pricing, photos, insurance or availability.',
+                    style: TextStyle(
+                      color: providerPrimaryDark,
+                      fontSize: 11,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _FullScreenGallery extends StatefulWidget {
+  final List<String> images;
+  final int initialIndex;
+
+  const _FullScreenGallery({
+    required this.images,
+    required this.initialIndex,
+  });
+
+  @override
+  State<_FullScreenGallery> createState() => _FullScreenGalleryState();
+}
+
+class _FullScreenGalleryState extends State<_FullScreenGallery> {
+  late final PageController _controller;
+  late int _index;
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.initialIndex;
+    _controller = PageController(initialPage: _index);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: Colors.black,
+          foregroundColor: Colors.white,
+          title: Text('${_index + 1} of ${widget.images.length}'),
+        ),
+        body: PageView.builder(
+          controller: _controller,
+          itemCount: widget.images.length,
+          onPageChanged: (index) => setState(() => _index = index),
+          itemBuilder: (_, index) => InteractiveViewer(
+            minScale: 1,
+            maxScale: 4,
+            child: Center(
+              child: Image.network(
+                widget.images[index],
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.broken_image_outlined,
+                  color: Colors.white54,
+                  size: 60,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+}
+
+Map<String, dynamic> _asMap(dynamic value) => value is Map
+    ? Map<String, dynamic>.from(value)
+    : <String, dynamic>{};
+
+String _raw(dynamic value) => value?.toString().trim() ?? '';
+
+String _display(dynamic value) {
+  final text = _raw(value);
+  return text.isEmpty ? 'Not provided' : text;
+}
+
+List<String> _images(dynamic value) => value is List
+    ? value
+        .map((item) => item?.toString().trim() ?? '')
+        .where((item) => item.isNotEmpty)
+        .toList()
+    : <String>[];
+
+String _money(String currency, dynamic value) {
+  final number = value is num
+      ? value
+      : num.tryParse(value?.toString() ?? '') ?? 0;
+  return '$currency ${NumberFormat('#,##0.##').format(number)}';
+}
+
+String _date(dynamic value) {
+  final parsed = DateTime.tryParse(value?.toString() ?? '');
+  return parsed == null
+      ? 'Not provided'
+      : DateFormat.yMMMd().format(parsed.toLocal());
 }

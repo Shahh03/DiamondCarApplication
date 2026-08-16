@@ -6,6 +6,11 @@ import '../provider_data_scope.dart';
 import '../provider_ui.dart';
 import 'provider_car_details.dart';
 
+const _surface = Colors.white;
+const _softBlue = Color(0xFFEFF6FF);
+const _success = Color(0xFF059669);
+const _orange = Color(0xFFEA580C);
+
 class ProviderFleetPage extends StatefulWidget {
   final String providerId;
 
@@ -15,27 +20,40 @@ class ProviderFleetPage extends StatefulWidget {
   });
 
   @override
-  State<ProviderFleetPage> createState() =>
-      _ProviderFleetPageState();
+  State<ProviderFleetPage> createState() => _ProviderFleetPageState();
 }
 
 class _ProviderFleetPageState extends State<ProviderFleetPage> {
-  final TextEditingController _searchController =
-      TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
 
   List<Map<String, dynamic>> _variants = <Map<String, dynamic>>[];
   String _availabilityFilter = 'All';
   String? _categoryFilter;
   String? _transmissionFilter;
   String? _fuelTypeFilter;
-
   bool _isLoading = true;
   String? _error;
 
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(_onSearchChanged);
+    _loadFleet();
+  }
+
+  @override
+  void dispose() {
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    if (mounted) setState(() {});
+  }
+
   int get _availableCount =>
       _variants.where((variant) => variant['isAvailable'] == true).length;
-
-  int get _unavailableCount => _variants.length - _availableCount;
 
   int get _activeFilterCount =>
       (_availabilityFilter == 'All' ? 0 : 1) +
@@ -53,27 +71,6 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
     return values;
   }
 
-  @override
-  void initState() {
-    super.initState();
-
-    _searchController.addListener(_handleSearchChanged);
-    _loadFleet();
-  }
-
-  @override
-  void dispose() {
-    _searchController.removeListener(_handleSearchChanged);
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  void _handleSearchChanged() {
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
   Future<void> _loadFleet() async {
     if (mounted) {
       setState(() {
@@ -86,33 +83,27 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
       final variants = await ProviderFleetApi.getProviderCars(
         providerId: widget.providerId,
       );
-
       if (!mounted) return;
-
       setState(() {
         _variants = variants;
         _isLoading = false;
       });
     } catch (error) {
       if (!mounted) return;
-
       setState(() {
         _isLoading = false;
-        _error = error
-            .toString()
-            .replaceFirst('Exception: ', '');
+        _error = error.toString().replaceFirst('Exception: ', '');
       });
     }
   }
 
   List<Map<String, dynamic>> get _filteredVariants {
-    final query =
-        _searchController.text.trim().toLowerCase();
+    final query = _searchController.text.trim().toLowerCase();
 
     return _variants.where((variant) {
-      final isAvailable = variant['isAvailable'] == true;
-      if (_availabilityFilter == 'Available' && !isAvailable) return false;
-      if (_availabilityFilter == 'Unavailable' && isAvailable) return false;
+      final available = variant['isAvailable'] == true;
+      if (_availabilityFilter == 'Available' && !available) return false;
+      if (_availabilityFilter == 'Unavailable' && available) return false;
 
       final car = _asMap(variant['car']);
       if (_categoryFilter != null &&
@@ -129,8 +120,7 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
       }
 
       if (query.isEmpty) return true;
-
-      final searchableValues = [
+      final searchable = [
         car['brand'],
         car['model'],
         car['year'],
@@ -139,17 +129,19 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
         car['fuelType'],
         variant['registrationNumber'],
         variant['color'],
-      ];
-
-      final searchableText = searchableValues
-          .map(
-            (value) =>
-                value?.toString().trim().toLowerCase() ?? '',
-          )
-          .join(' ');
-
-      return searchableText.contains(query);
+      ].map((value) => value?.toString().toLowerCase() ?? '').join(' ');
+      return searchable.contains(query);
     }).toList();
+  }
+
+  void _clearAll() {
+    _searchController.clear();
+    setState(() {
+      _availabilityFilter = 'All';
+      _categoryFilter = null;
+      _transmissionFilter = null;
+      _fuelTypeFilter = null;
+    });
   }
 
   Future<void> _showFilters() async {
@@ -163,15 +155,16 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => StatefulBuilder(
-        builder: (context, setSheetState) => Container(
+        builder: (context, updateSheet) => Container(
           padding: EdgeInsets.fromLTRB(
             20,
             10,
             20,
-            20 + MediaQuery.viewPaddingOf(context).bottom,
+            20 + MediaQuery.viewInsetsOf(context).bottom +
+                MediaQuery.viewPaddingOf(context).bottom,
           ),
           decoration: const BoxDecoration(
-            color: Colors.white,
+            color: _surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: SafeArea(
@@ -201,18 +194,12 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Narrow vehicles by availability and specifications.',
+                    'Refine vehicles by status and specifications.',
                     style: TextStyle(color: providerMuted),
                   ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Availability',
-                    style: TextStyle(
-                      color: providerInk,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 22),
+                  const _FieldLabel('Availability'),
+                  const SizedBox(height: 9),
                   Row(
                     children: ['All', 'Available', 'Unavailable']
                         .map(
@@ -221,10 +208,10 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
                               padding: EdgeInsets.only(
                                 right: value == 'Unavailable' ? 0 : 8,
                               ),
-                              child: _FleetFilter(
+                              child: _ChoiceButton(
                                 label: value,
                                 selected: availability == value,
-                                onTap: () => setSheetState(
+                                onTap: () => updateSheet(
                                   () => availability = value,
                                 ),
                               ),
@@ -233,12 +220,13 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
                         )
                         .toList(),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 18),
                   _FilterDropdown(
                     label: 'Category',
                     value: category,
                     options: _carOptions('category'),
-                    onChanged: (value) => setSheetState(() => category = value),
+                    onChanged: (value) =>
+                        updateSheet(() => category = value),
                   ),
                   const SizedBox(height: 14),
                   _FilterDropdown(
@@ -246,27 +234,31 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
                     value: transmission,
                     options: _carOptions('transmission'),
                     onChanged: (value) =>
-                        setSheetState(() => transmission = value),
+                        updateSheet(() => transmission = value),
                   ),
                   const SizedBox(height: 14),
                   _FilterDropdown(
                     label: 'Fuel type',
                     value: fuelType,
                     options: _carOptions('fuelType'),
-                    onChanged: (value) => setSheetState(() => fuelType = value),
+                    onChanged: (value) =>
+                        updateSheet(() => fuelType = value),
                   ),
                   const SizedBox(height: 22),
                   Row(
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () => setSheetState(() {
+                          onPressed: () => updateSheet(() {
                             availability = 'All';
                             category = null;
                             transmission = null;
                             fuelType = null;
                           }),
-                          child: const Text('Clear all'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          child: const Text('Reset'),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -283,8 +275,9 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
                           },
                           style: FilledButton.styleFrom(
                             backgroundColor: providerPrimary,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
                           ),
-                          child: const Text('Apply filters'),
+                          child: const Text('Show results'),
                         ),
                       ),
                     ],
@@ -298,158 +291,117 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
     );
   }
 
-  void _openCarDetails(Map<String, dynamic> variant) {
-    final providerScope = ProviderDataScope.of(context);
+  void _openDetails(Map<String, dynamic> variant) {
+    final scope = ProviderDataScope.of(context);
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ProviderDataScope(
-          provider: providerScope.provider,
-          refresh: providerScope.refresh,
-          child: ProviderCarDetailsPage(
-            variant: variant,
-          ),
+          provider: scope.provider,
+          refresh: scope.refresh,
+          child: ProviderCarDetailsPage(variant: variant),
         ),
       ),
     );
   }
 
-  static Map<String, dynamic> _asMap(dynamic value) {
-    if (value is Map) {
-      return Map<String, dynamic>.from(value);
-    }
-
-    return <String, dynamic>{};
-  }
-
   @override
   Widget build(BuildContext context) {
-    final currency =
-        ProviderDataScope.of(context).currency;
+    final currency = ProviderDataScope.of(context).currency;
+    final filtered = _filteredVariants;
 
     return SafeArea(
       child: RefreshIndicator(
         onRefresh: _loadFleet,
         child: CustomScrollView(
-          physics:
-              const AlwaysScrollableScrollPhysics(),
+          physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverPadding(
-              padding:
-                  const EdgeInsets.fromLTRB(16, 18, 16, 12),
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
               sliver: SliverToBoxAdapter(
-                child: ProviderPageHeader(
-                  title: 'My fleet',
-                  subtitle:
-                      '${_variants.length} vehicle${_variants.length == 1 ? '' : 's'} in your fleet',
-                  action: IconButton(
-                    onPressed: _isLoading ? null : _loadFleet,
-                    tooltip: 'Refresh fleet',
-                    icon: const Icon(Icons.refresh_rounded),
+                child: _FleetHeader(
+                  total: _variants.length,
+                  available: _availableCount,
+                  isRefreshing: _isLoading && _variants.isNotEmpty,
+                  onRefresh: _loadFleet,
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              sliver: SliverToBoxAdapter(
+                child: _SearchBar(
+                  controller: _searchController,
+                  activeFilterCount: _activeFilterCount,
+                  onFilter: _showFilters,
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              sliver: SliverToBoxAdapter(
+                child: _AvailabilitySelector(
+                  selected: _availabilityFilter,
+                  onSelected: (value) =>
+                      setState(() => _availabilityFilter = value),
+                ),
+              ),
+            ),
+            if (_categoryFilter != null ||
+                _transmissionFilter != null ||
+                _fuelTypeFilter != null)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                sliver: SliverToBoxAdapter(
+                  child: _ActiveFilters(
+                    category: _categoryFilter,
+                    transmission: _transmissionFilter,
+                    fuelType: _fuelTypeFilter,
+                    onRemoveCategory: () =>
+                        setState(() => _categoryFilter = null),
+                    onRemoveTransmission: () =>
+                        setState(() => _transmissionFilter = null),
+                    onRemoveFuelType: () =>
+                        setState(() => _fuelTypeFilter = null),
+                    onClear: _clearAll,
                   ),
                 ),
               ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              sliver: SliverToBoxAdapter(
-                child: _FleetSummary(
-                  total: _variants.length,
-                  available: _availableCount,
-                  unavailable: _unavailableCount,
-                ),
-              ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              sliver: SliverToBoxAdapter(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        textInputAction: TextInputAction.search,
-                        decoration: InputDecoration(
-                          hintText: 'Search brand, model or registration',
-                          prefixIcon: const Icon(Icons.search_rounded),
-                          suffixIcon: _searchController.text.isEmpty
-                              ? null
-                              : IconButton(
-                                  onPressed: _searchController.clear,
-                                  icon: const Icon(Icons.close_rounded),
-                                ),
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: const BorderSide(color: providerBorder),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: const BorderSide(color: providerBorder),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: const BorderSide(
-                              color: providerPrimary,
-                              width: 1.5,
-                            ),
-                          ),
-                        ),
-                      ),
+            if (!_isLoading && _variants.isNotEmpty)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(18, 2, 18, 10),
+                sliver: SliverToBoxAdapter(
+                  child: Text(
+                    '${filtered.length} vehicle${filtered.length == 1 ? '' : 's'}',
+                    style: const TextStyle(
+                      color: providerMuted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
                     ),
-                    const SizedBox(width: 10),
-                    _FilterButton(
-                      count: _activeFilterCount,
-                      onTap: _showFilters,
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              sliver: SliverToBoxAdapter(
-                child: Row(
-                  children: ['All', 'Available', 'Unavailable']
-                      .map(
-                        (filter) => Expanded(
-                          child: Padding(
-                            padding: EdgeInsets.only(
-                              right: filter == 'Unavailable' ? 0 : 8,
-                            ),
-                            child: _FleetFilter(
-                              label: filter,
-                              selected: _availabilityFilter == filter,
-                              onTap: () => setState(
-                                () => _availabilityFilter = filter,
-                              ),
-                            ),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
-              ),
-            ),
-            ..._buildContent(currency),
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 28),
-            ),
+            ..._buildContent(filtered, currency),
+            const SliverToBoxAdapter(child: SizedBox(height: 28)),
           ],
         ),
       ),
     );
   }
 
-  List<Widget> _buildContent(String currency) {
-    if (_isLoading) {
+  List<Widget> _buildContent(
+    List<Map<String, dynamic>> filtered,
+    String currency,
+  ) {
+    if (_isLoading && _variants.isEmpty) {
       return [
         SliverPadding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           sliver: SliverList.list(
             children: const [
               _FleetSkeleton(),
-              SizedBox(height: 12),
+              SizedBox(height: 10),
+              _FleetSkeleton(),
+              SizedBox(height: 10),
               _FleetSkeleton(),
             ],
           ),
@@ -457,15 +409,14 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
       ];
     }
 
-    if (_error != null) {
+    if (_error != null && _variants.isEmpty) {
       return [
         SliverPadding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
           sliver: SliverToBoxAdapter(
             child: ProviderEmptyState(
               icon: Icons.cloud_off_rounded,
-              title: 'Could not load your fleet',
+              title: 'Fleet unavailable',
               message: _error!,
               actionLabel: 'Try again',
               onAction: _loadFleet,
@@ -476,34 +427,32 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
     }
 
     if (_variants.isEmpty) {
-      return [
+      return const [
         SliverPadding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16),
+          padding: EdgeInsets.fromLTRB(16, 24, 16, 0),
           sliver: SliverToBoxAdapter(
             child: ProviderEmptyState(
               icon: Icons.directions_car_outlined,
               title: 'Your fleet is empty',
               message:
-                  'Vehicles added through the management portal will appear here.',
+                  'Vehicles added through the management portal appear here.',
             ),
           ),
         ),
       ];
     }
 
-    final filteredVariants = _filteredVariants;
-
-    if (filteredVariants.isEmpty) {
-      return const [
+    if (filtered.isEmpty) {
+      return [
         SliverPadding(
-          padding: EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
           sliver: SliverToBoxAdapter(
             child: ProviderEmptyState(
               icon: Icons.search_off_rounded,
               title: 'No matching vehicles',
-              message:
-                  'Try another brand, model, color or registration number.',
+              message: 'Try changing your search or active filters.',
+              actionLabel: 'Clear filters',
+              onAction: _clearAll,
             ),
           ),
         ),
@@ -512,85 +461,128 @@ class _ProviderFleetPageState extends State<ProviderFleetPage> {
 
     return [
       SliverPadding(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16),
-        sliver: SliverList(
-          delegate: SliverChildBuilderDelegate(
-            (context, index) {
-              final variant = filteredVariants[index];
-
-              return Padding(
-                padding: EdgeInsets.only(
-                  bottom:
-                      index == filteredVariants.length - 1
-                          ? 0
-                          : 12,
-                ),
-                child: _FleetCard(
-                  variant: variant,
-                  currency: currency,
-                  onView: () => _openCarDetails(variant),
-                ),
-              );
-            },
-            childCount: filteredVariants.length,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        sliver: SliverList.builder(
+          itemCount: filtered.length,
+          itemBuilder: (context, index) => Padding(
+            padding: EdgeInsets.only(
+              bottom: index == filtered.length - 1 ? 0 : 10,
+            ),
+            child: _FleetRow(
+              variant: filtered[index],
+              currency: currency,
+              onTap: () => _openDetails(filtered[index]),
+            ),
           ),
         ),
       ),
     ];
   }
+
+  static Map<String, dynamic> _asMap(dynamic value) => value is Map
+      ? Map<String, dynamic>.from(value)
+      : <String, dynamic>{};
 }
 
-class _FleetSummary extends StatelessWidget {
+class _FleetHeader extends StatelessWidget {
   final int total;
   final int available;
-  final int unavailable;
+  final bool isRefreshing;
+  final VoidCallback onRefresh;
 
-  const _FleetSummary({
+  const _FleetHeader({
     required this.total,
     required this.available,
-    required this.unavailable,
+    required this.isRefreshing,
+    required this.onRefresh,
   });
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [providerPrimaryDark, Color(0xFF2563EB)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+  Widget build(BuildContext context) => Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Fleet',
+                  style: TextStyle(
+                    color: providerInk,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$total vehicle${total == 1 ? '' : 's'} · $available available',
+                  style: const TextStyle(color: providerMuted, fontSize: 12),
+                ),
+              ],
+            ),
           ),
-          borderRadius: BorderRadius.circular(22),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x242563EB),
-              blurRadius: 20,
-              offset: Offset(0, 8),
+          IconButton(
+            onPressed: isRefreshing ? null : onRefresh,
+            tooltip: 'Refresh fleet',
+            style: IconButton.styleFrom(
+              backgroundColor: _surface,
+              side: const BorderSide(color: providerBorder),
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            _SummaryItem(
-              icon: Icons.directions_car_rounded,
-              label: 'Total',
-              value: total,
+            icon: isRefreshing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      );
+}
+
+class _SearchBar extends StatelessWidget {
+  final TextEditingController controller;
+  final int activeFilterCount;
+  final VoidCallback onFilter;
+
+  const _SearchBar({
+    required this.controller,
+    required this.activeFilterCount,
+    required this.onFilter,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: controller,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: 'Search vehicles or registration',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: controller.text.isEmpty
+                    ? null
+                    : IconButton(
+                        onPressed: controller.clear,
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                filled: true,
+                fillColor: _surface,
+                border: _searchBorder(providerBorder),
+                enabledBorder: _searchBorder(providerBorder),
+                focusedBorder: _searchBorder(providerPrimary, width: 1.5),
+              ),
             ),
-            const _SummaryDivider(),
-            _SummaryItem(
-              icon: Icons.check_circle_outline_rounded,
-              label: 'Available',
-              value: available,
-            ),
-            const _SummaryDivider(),
-            _SummaryItem(
-              icon: Icons.remove_circle_outline_rounded,
-              label: 'Unavailable',
-              value: unavailable,
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 10),
+          _FilterButton(count: activeFilterCount, onTap: onFilter),
+        ],
+      );
+
+  static OutlineInputBorder _searchBorder(Color color, {double width = 1}) =>
+      OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: color, width: width),
       );
 }
 
@@ -605,7 +597,7 @@ class _FilterButton extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Material(
-            color: count > 0 ? const Color(0xFFEFF6FF) : Colors.white,
+            color: count > 0 ? _softBlue : _surface,
             borderRadius: BorderRadius.circular(16),
             child: InkWell(
               onTap: onTap,
@@ -633,12 +625,12 @@ class _FilterButton extends StatelessWidget {
               child: Container(
                 constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
                 padding: const EdgeInsets.symmetric(horizontal: 5),
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: providerPrimary,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white, width: 2),
+                  border: Border.all(color: _surface, width: 2),
                 ),
-                alignment: Alignment.center,
                 child: Text(
                   '$count',
                   style: const TextStyle(
@@ -650,6 +642,520 @@ class _FilterButton extends StatelessWidget {
               ),
             ),
         ],
+      );
+}
+
+class _AvailabilitySelector extends StatelessWidget {
+  final String selected;
+  final ValueChanged<String> onSelected;
+
+  const _AvailabilitySelector({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE2E8F0),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: ['All', 'Available', 'Unavailable']
+              .map(
+                (value) => Expanded(
+                  child: _Segment(
+                    label: value,
+                    selected: selected == value,
+                    onTap: () => onSelected(value),
+                  ),
+                ),
+              )
+              .toList(),
+        ),
+      );
+}
+
+class _Segment extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _Segment({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: selected ? _surface : Colors.transparent,
+        borderRadius: BorderRadius.circular(11),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(11),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: selected ? providerInk : providerMuted,
+                fontSize: 11,
+                fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      );
+}
+
+class _ActiveFilters extends StatelessWidget {
+  final String? category;
+  final String? transmission;
+  final String? fuelType;
+  final VoidCallback onRemoveCategory;
+  final VoidCallback onRemoveTransmission;
+  final VoidCallback onRemoveFuelType;
+  final VoidCallback onClear;
+
+  const _ActiveFilters({
+    required this.category,
+    required this.transmission,
+    required this.fuelType,
+    required this.onRemoveCategory,
+    required this.onRemoveTransmission,
+    required this.onRemoveFuelType,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) => Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  if (category != null)
+                    _FilterChip(label: category!, onDeleted: onRemoveCategory),
+                  if (transmission != null)
+                    _FilterChip(
+                      label: transmission!,
+                      onDeleted: onRemoveTransmission,
+                    ),
+                  if (fuelType != null)
+                    _FilterChip(label: fuelType!, onDeleted: onRemoveFuelType),
+                ],
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: onClear,
+            style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+            child: const Text('Clear'),
+          ),
+        ],
+      );
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onDeleted;
+
+  const _FilterChip({required this.label, required this.onDeleted});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(right: 7),
+        child: InputChip(
+          label: Text(label),
+          onDeleted: onDeleted,
+          deleteIcon: const Icon(Icons.close_rounded, size: 16),
+          visualDensity: VisualDensity.compact,
+          backgroundColor: _softBlue,
+          side: const BorderSide(color: Color(0xFFBFDBFE)),
+          labelStyle: const TextStyle(
+            color: providerPrimaryDark,
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      );
+}
+
+class _FleetRow extends StatelessWidget {
+  final Map<String, dynamic> variant;
+  final String currency;
+  final VoidCallback onTap;
+
+  const _FleetRow({
+    required this.variant,
+    required this.currency,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final car = _asMap(variant['car']);
+    final images = _images(variant['images']);
+    final name = [car['brand'], car['model']]
+        .map((value) => value?.toString().trim() ?? '')
+        .where((value) => value.isNotEmpty)
+        .join(' ');
+    final available = variant['isAvailable'] == true;
+
+    return Material(
+      color: _surface,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: providerBorder),
+          ),
+          child: SizedBox(
+            height: 142,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+              _FleetThumbnail(
+                imageUrl: images.isEmpty ? '' : images.first,
+                imageCount: images.length,
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(13, 13, 11, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              name.isEmpty ? 'Unnamed vehicle' : name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: providerInk,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          _StatusDot(available: available),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        [
+                          car['year'],
+                          variant['registrationNumber'],
+                        ].map((value) => value?.toString().trim() ?? '')
+                            .where((value) => value.isNotEmpty)
+                            .join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: providerMuted,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 9),
+                      Wrap(
+                        spacing: 5,
+                        runSpacing: 5,
+                        children: [
+                          if (_text(car['category']).isNotEmpty)
+                            _SpecTag(_text(car['category'])),
+                          if (_text(car['transmission']).isNotEmpty)
+                            _SpecTag(_text(car['transmission'])),
+                          if (_text(car['fuelType']).isNotEmpty)
+                            _SpecTag(_text(car['fuelType'])),
+                        ],
+                      ),
+                      const Spacer(),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text.rich(
+                              TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: _money(
+                                      currency,
+                                      variant['rentalPricePerDay'],
+                                    ),
+                                    style: const TextStyle(
+                                      color: providerPrimary,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  const TextSpan(
+                                    text: ' / day',
+                                    style: TextStyle(
+                                      color: providerMuted,
+                                      fontSize: 9,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: providerMuted,
+                            size: 20,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static Map<String, dynamic> _asMap(dynamic value) => value is Map
+      ? Map<String, dynamic>.from(value)
+      : <String, dynamic>{};
+
+  static List<String> _images(dynamic value) => value is List
+      ? value
+          .map((item) => item?.toString().trim() ?? '')
+          .where((item) => item.isNotEmpty)
+          .toList()
+      : <String>[];
+
+  static String _text(dynamic value) => value?.toString().trim() ?? '';
+
+  static String _money(String currency, dynamic value) {
+    final number = value is num
+        ? value
+        : num.tryParse(value?.toString() ?? '') ?? 0;
+    return '$currency ${NumberFormat('#,##0.##').format(number)}';
+  }
+}
+
+class _FleetThumbnail extends StatelessWidget {
+  final String imageUrl;
+  final int imageCount;
+
+  const _FleetThumbnail({required this.imageUrl, required this.imageCount});
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+        borderRadius: const BorderRadius.horizontal(left: Radius.circular(19)),
+        child: SizedBox(
+          width: 116,
+          height: 142,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              ColoredBox(
+                color: const Color(0xFFF1F5F9),
+                child: imageUrl.isEmpty
+                    ? const Icon(
+                        Icons.directions_car_rounded,
+                        size: 42,
+                        color: providerMuted,
+                      )
+                    : Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (_, child, progress) => progress == null
+                            ? child
+                            : const Center(
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.broken_image_outlined,
+                          size: 36,
+                          color: providerMuted,
+                        ),
+                      ),
+              ),
+              if (imageCount > 0)
+                Positioned(
+                  left: 8,
+                  bottom: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.62),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.photo_library_outlined,
+                          color: Colors.white,
+                          size: 12,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$imageCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+}
+
+class _StatusDot extends StatelessWidget {
+  final bool available;
+
+  const _StatusDot({required this.available});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+        decoration: BoxDecoration(
+          color: available
+              ? const Color(0xFFECFDF5)
+              : const Color(0xFFFFF7ED),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: available ? _success : _orange,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              available ? 'Available' : 'Unavailable',
+              style: TextStyle(
+                color: available ? _success : _orange,
+                fontSize: 8,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _SpecTag extends StatelessWidget {
+  final String label;
+
+  const _SpecTag(this.label);
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: providerBorder),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: providerMuted,
+            fontSize: 8,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+}
+
+class _FleetSkeleton extends StatelessWidget {
+  const _FleetSkeleton();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        height: 142,
+        decoration: BoxDecoration(
+          color: _surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: providerBorder),
+        ),
+      );
+}
+
+class _FieldLabel extends StatelessWidget {
+  final String text;
+
+  const _FieldLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) => Text(
+        text,
+        style: const TextStyle(
+          color: providerInk,
+          fontWeight: FontWeight.w800,
+        ),
+      );
+}
+
+class _ChoiceButton extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ChoiceButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: selected ? _softBlue : _surface,
+        borderRadius: BorderRadius.circular(13),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(13),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 11),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(
+                color: selected ? providerPrimary : providerBorder,
+              ),
+            ),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: selected ? providerPrimary : providerMuted,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ),
       );
 }
 
@@ -668,7 +1174,7 @@ class _FilterDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => DropdownButtonFormField<String>(
-        value: options.contains(value) ? value : null,
+        value: value ?? '',
         isExpanded: true,
         decoration: InputDecoration(
           labelText: label,
@@ -683,10 +1189,9 @@ class _FilterDropdown extends StatelessWidget {
             borderSide: const BorderSide(color: providerBorder),
           ),
         ),
-        hint: Text('All ${label.toLowerCase()}'),
         items: [
           DropdownMenuItem<String>(
-            value: null,
+            value: '',
             child: Text('All ${label.toLowerCase()}'),
           ),
           ...options.map(
@@ -696,590 +1201,7 @@ class _FilterDropdown extends StatelessWidget {
             ),
           ),
         ],
-        onChanged: onChanged,
+        onChanged: (selected) =>
+            onChanged(selected == null || selected.isEmpty ? null : selected),
       );
-}
-
-class _SummaryItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final int value;
-
-  const _SummaryItem({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) => Expanded(
-        child: Column(
-          children: [
-            Icon(icon, color: const Color(0xFFBFDBFE), size: 21),
-            const SizedBox(height: 6),
-            Text(
-              '$value',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 2),
-            FittedBox(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  color: Color(0xFFDBEAFE),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-}
-
-class _SummaryDivider extends StatelessWidget {
-  const _SummaryDivider();
-
-  @override
-  Widget build(BuildContext context) => Container(
-        width: 1,
-        height: 48,
-        color: Colors.white.withOpacity(0.18),
-      );
-}
-
-class _FleetFilter extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _FleetFilter({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) => Material(
-        color: selected ? providerPrimary : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: selected ? providerPrimary : providerBorder,
-              ),
-            ),
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: selected ? Colors.white : providerMuted,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ),
-      );
-}
-
-class _FleetSkeleton extends StatelessWidget {
-  const _FleetSkeleton();
-
-  @override
-  Widget build(BuildContext context) => Container(
-        height: 350,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: providerBorder),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              height: 170,
-              decoration: const BoxDecoration(
-                color: Color(0xFFEFF3F8),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _skeletonBlock(double.infinity, 17),
-                  const SizedBox(height: 10),
-                  _skeletonBlock(130, 12),
-                  const SizedBox(height: 18),
-                  Row(
-                    children: [
-                      Expanded(child: _skeletonBlock(double.infinity, 52)),
-                      const SizedBox(width: 10),
-                      Expanded(child: _skeletonBlock(double.infinity, 52)),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  _skeletonBlock(double.infinity, 38),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-
-  static Widget _skeletonBlock(double width, double height) => Container(
-        width: width,
-        height: height,
-        decoration: BoxDecoration(
-          color: const Color(0xFFEFF3F8),
-          borderRadius: BorderRadius.circular(10),
-        ),
-      );
-}
-
-class _FleetCard extends StatelessWidget {
-  final Map<String, dynamic> variant;
-  final String currency;
-  final VoidCallback onView;
-
-  const _FleetCard({
-    required this.variant,
-    required this.currency,
-    required this.onView,
-  });
-
-  static Map<String, dynamic> _asMap(dynamic value) {
-    if (value is Map) {
-      return Map<String, dynamic>.from(value);
-    }
-
-    return <String, dynamic>{};
-  }
-
-  static num _asNumber(dynamic value) {
-    if (value is num) return value;
-
-    return num.tryParse(value?.toString() ?? '') ?? 0;
-  }
-
-  static String _text(dynamic value) {
-    return value?.toString().trim() ?? '';
-  }
-
-  String get _imageUrl {
-    final images = variant['images'];
-
-    if (images is! List || images.isEmpty) {
-      return '';
-    }
-
-    final firstImage = images.first;
-
-    if (firstImage is String) {
-      return firstImage.trim();
-    }
-
-    if (firstImage is Map) {
-      return _text(
-        firstImage['url'] ??
-            firstImage['secure_url'] ??
-            firstImage['filepath'],
-      );
-    }
-
-    return '';
-  }
-
-  int get _imageCount {
-    final images = variant['images'];
-    return images is List ? images.length : 0;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final car = _asMap(variant['car']);
-
-    final brand = _text(car['brand']);
-    final model = _text(car['model']);
-    final year = _text(car['year']);
-    final category = _text(car['category']);
-    final transmission = _text(car['transmission']);
-    final fuelType = _text(car['fuelType']);
-
-    final carName = [brand, model]
-        .where((value) => value.isNotEmpty)
-        .join(' ');
-
-    final registration =
-        _text(variant['registrationNumber']);
-
-    final color = _text(variant['color']);
-
-    final dailyPrice =
-        _asNumber(variant['rentalPricePerDay']);
-
-    final deposit =
-        _asNumber(variant['depositAmount']);
-
-    final isAvailable =
-        variant['isAvailable'] == true;
-
-    return ProviderSectionCard(
-      padding: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _VehicleImage(
-            imageUrl: _imageUrl,
-            isAvailable: isAvailable,
-            imageCount: _imageCount,
-          ),
-          Padding(
-            padding:
-                const EdgeInsets.fromLTRB(14, 13, 14, 14),
-            child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        carName.isEmpty
-                            ? 'Unnamed vehicle'
-                            : carName,
-                        maxLines: 1,
-                        overflow:
-                            TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: providerInk,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (year.isNotEmpty ||
-                    category.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    [year, category]
-                        .where(
-                          (value) => value.isNotEmpty,
-                        )
-                        .join(' • '),
-                    style: const TextStyle(
-                      color: providerMuted,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 13),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _PriceItem(
-                        label: 'Price per day',
-                        value:
-                            '$currency ${NumberFormat.decimalPattern().format(dailyPrice)}',
-                        color: providerPrimary,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _PriceItem(
-                        label: 'Deposit',
-                        value:
-                            '$currency ${NumberFormat.decimalPattern().format(deposit)}',
-                        color: providerInk,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 13),
-                Wrap(
-                  spacing: 7,
-                  runSpacing: 7,
-                  children: [
-                    if (registration.isNotEmpty)
-                      _InformationChip(
-                        icon: Icons.pin_outlined,
-                        text: registration,
-                      ),
-                    if (color.isNotEmpty)
-                      _InformationChip(
-                        icon: Icons.palette_outlined,
-                        text: color,
-                      ),
-                    if (transmission.isNotEmpty)
-                      _InformationChip(
-                        icon:
-                            Icons.settings_outlined,
-                        text: transmission,
-                      ),
-                    if (fuelType.isNotEmpty)
-                      _InformationChip(
-                        icon:
-                            Icons.local_gas_station_outlined,
-                        text: fuelType,
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 13),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: onView,
-                    icon: const Icon(Icons.visibility_outlined),
-                    label: const Text('View details'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _VehicleImage extends StatelessWidget {
-  final String imageUrl;
-  final bool isAvailable;
-  final int imageCount;
-
-  const _VehicleImage({
-    required this.imageUrl,
-    required this.isAvailable,
-    required this.imageCount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(
-        top: Radius.circular(20),
-      ),
-      child: AspectRatio(
-        aspectRatio: 16 / 8.2,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Container(
-              width: double.infinity,
-              color: const Color(0xFFF1F5F9),
-              child: imageUrl.isEmpty
-                  ? const Center(
-                      child: Icon(
-                        Icons.directions_car_rounded,
-                        size: 58,
-                        color: providerMuted,
-                      ),
-                    )
-                  : Image.network(
-                      imageUrl,
-                      fit: BoxFit.cover,
-                      loadingBuilder: (context, child, progress) {
-                        if (progress == null) return child;
-                        return const Center(
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        );
-                      },
-                      errorBuilder: (_, __, ___) => const Center(
-                        child: Icon(
-                          Icons.broken_image_outlined,
-                          size: 45,
-                          color: providerMuted,
-                        ),
-                      ),
-                    ),
-            ),
-            Positioned(
-              top: 12,
-              left: 12,
-              child: _AvailabilityBadge(isAvailable: isAvailable),
-            ),
-            if (imageCount > 0)
-              Positioned(
-                right: 12,
-                bottom: 12,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.62),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.photo_library_outlined,
-                        color: Colors.white,
-                        size: 14,
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        '$imageCount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AvailabilityBadge extends StatelessWidget {
-  final bool isAvailable;
-
-  const _AvailabilityBadge({
-    required this.isAvailable,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final backgroundColor = isAvailable
-        ? const Color(0xFFD1FAE5)
-        : const Color(0xFFFFEDD5);
-
-    final foregroundColor = isAvailable
-        ? const Color(0xFF047857)
-        : const Color(0xFFC2410C);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 9,
-        vertical: 5,
-      ),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        isAvailable ? 'Available' : 'Unavailable',
-        style: TextStyle(
-          color: foregroundColor,
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-}
-
-class _PriceItem extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-
-  const _PriceItem({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(11),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: providerBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: providerMuted,
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: color,
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InformationChip extends StatelessWidget {
-  final IconData icon;
-  final String text;
-
-  const _InformationChip({
-    required this.icon,
-    required this.text,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 9,
-        vertical: 6,
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: providerBorder),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 14,
-            color: providerMuted,
-          ),
-          const SizedBox(width: 5),
-          Text(
-            text,
-            style: const TextStyle(
-              color: providerMuted,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
