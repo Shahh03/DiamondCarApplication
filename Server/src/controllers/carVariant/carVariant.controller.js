@@ -6,7 +6,10 @@ import Car from "../../models/car.js";
 import CarVariant from "../../models/carVariant.js";
 import Provider from "../../models/provider.js";
 import { getRecommendationsForRenter } from "../../services/recommendation.service.js";
-import { uploadBufferToCloudinary } from "../../utils/uploadToCloudinary.js";
+import {
+  cloudinaryFolders,
+  uploadBufferToCloudinary,
+} from "../../utils/uploadToCloudinary.js";
 
 const SAFE_PROVIDER_FIELDS =
   "companyName address.city address.country profilePicture isVerified status currency";
@@ -247,7 +250,10 @@ export const uploadCarVariantImages = async (req, res) => {
 
     const results = await Promise.all(
       req.files.map((file) =>
-        uploadBufferToCloudinary(file.buffer, "car-rental/car-variants/images")
+        uploadBufferToCloudinary(
+          file.buffer,
+          cloudinaryFolders.carVariantImages(carVariantId)
+        )
       )
     );
     const urls = results.map((result) => result.secure_url);
@@ -322,6 +328,81 @@ export const removeCarVariantImage = async (req, res) => {
   } catch (error) {
     console.error("Remove car variant image error:", error);
     return res.status(500).json({ message: "Could not remove image" });
+  }
+};
+
+export const reorderCarVariantImages = async (req, res) => {
+  try {
+    const { carVariantId } = req.params;
+    const { orderedImageUrls } = req.body;
+
+    if (!Array.isArray(orderedImageUrls)) {
+      return res.status(400).json({
+        message: "orderedImageUrls must be an array",
+      });
+    }
+
+    const variant = await CarVariant.findOne({
+      _id: carVariantId,
+      ...LISTED,
+    });
+    if (!variant) {
+      return res.status(404).json({ message: "Car variant not found" });
+    }
+
+    const currentImages = variant.images ?? [];
+    const currentPublicIds = variant.imagePublicIds ?? [];
+
+    if (orderedImageUrls.length !== currentImages.length) {
+      return res.status(400).json({
+        message: "The image order must include every current vehicle image",
+      });
+    }
+
+    if (new Set(orderedImageUrls).size !== orderedImageUrls.length) {
+      return res.status(400).json({
+        message: "The image order cannot contain duplicate images",
+      });
+    }
+
+    const imageIndexes = new Map(
+      currentImages.map((imageUrl, index) => [imageUrl, index])
+    );
+    const containsUnknownImage = orderedImageUrls.some(
+      (imageUrl) =>
+        typeof imageUrl !== "string" || !imageIndexes.has(imageUrl)
+    );
+    if (containsUnknownImage) {
+      return res.status(400).json({
+        message: "The image order contains an image that is not on this vehicle",
+      });
+    }
+
+    if (currentPublicIds.length !== currentImages.length) {
+      return res.status(409).json({
+        message: "Vehicle image metadata is out of sync and cannot be reordered",
+      });
+    }
+
+    variant.images = [...orderedImageUrls];
+    if (currentPublicIds.length === currentImages.length) {
+      variant.imagePublicIds = orderedImageUrls.map(
+        (imageUrl) => currentPublicIds[imageIndexes.get(imageUrl)]
+      );
+    }
+
+    await variant.save();
+
+    return res.status(200).json({
+      message: "Vehicle image order updated successfully",
+      images: variant.images,
+      imagePublicIds: variant.imagePublicIds,
+    });
+  } catch (error) {
+    console.error("Reorder car variant images error:", error);
+    return res.status(500).json({
+      message: "Could not update vehicle image order",
+    });
   }
 };
 

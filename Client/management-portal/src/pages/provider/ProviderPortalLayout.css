@@ -1,0 +1,139 @@
+:root {
+  --portal-navy: #032552;
+  --portal-navy-deep: #001d43;
+  --portal-blue: #1261e8;
+  --portal-teal: #18b5ad;
+  --portal-ink: #0b1730;
+  --portal-muted: #6f7c91;
+  --portal-border: #e2e8f1;
+  --portal-bg: #f6f8fb;
+}
+
+* { box-sizing: border-box; }
+
+.provider-portal-shell {
+  min-height: 100vh;
+  background: var(--portal-bg);
+  color: var(--portal-ink);
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+}
+
+.portal-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  padding: 30px 12px 22px;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(160deg, var(--portal-navy-deep), #062e64);
+  color: #fff;
+  z-index: 30;
+}
+
+.portal-brand {
+  height: 62px;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -.5px;
+}
+
+.portal-brand svg { font-size: 32px; color: #fff; }
+.portal-brand strong { color: #35a5ff; }
+.portal-navigation { display: grid; gap: 8px; margin-top: 26px; }
+
+.portal-nav-link,
+.portal-sidebar-footer button {
+  min-height: 50px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #e3ecfa;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background .18s ease, color .18s ease;
+}
+
+.portal-nav-link svg,
+.portal-sidebar-footer svg { font-size: 22px; }
+.portal-nav-link:hover,
+.portal-sidebar-footer button:hover { background: rgba(255,255,255,.08); }
+.portal-nav-link.active { background: linear-gradient(100deg, #1757a8, #286cca); color: #fff; }
+.portal-sidebar-footer { margin-top: auto; display: grid; gap: 4px; }
+
+.portal-workspace { min-width: 0; }
+.portal-topbar {
+  height: 70px;
+  padding: 0 34px;
+  border-bottom: 1px solid var(--portal-border);
+  background: rgba(255,255,255,.96);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.portal-search {
+  width: min(516px, 48vw);
+  height: 43px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #d8dfeb;
+  border-radius: 8px;
+  background: #fff;
+  color: #76839a;
+}
+
+.portal-search svg { font-size: 20px; }
+.portal-search input { width: 100%; border: 0; outline: 0; color: var(--portal-ink); font: inherit; }
+.portal-user-actions { display: flex; align-items: center; gap: 24px; }
+.portal-notifications { position: relative; border: 0; background: none; cursor: pointer; color: var(--portal-ink); }
+.portal-notifications span {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: var(--portal-blue);
+  color: #fff;
+  font-size: 9px;
+  display: grid;
+  place-items: center;
+}
+
+.portal-user { display: flex; align-items: center; gap: 10px; }
+.portal-user img,
+.portal-user > span { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; }
+.portal-user > span { display: grid; place-items: center; background: #dbeafe; color: var(--portal-blue); font-weight: 900; }
+.portal-user strong { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.portal-menu-button { display: none; border: 0; background: transparent; }
+.portal-sidebar-scrim { display: none; }
+
+@media (max-width: 900px) {
+  .provider-portal-shell { display: block; }
+  .portal-sidebar { position: fixed; left: 0; transform: translateX(-102%); width: 232px; transition: transform .2s ease; }
+  .portal-sidebar.is-open { transform: translateX(0); }
+  .portal-sidebar-scrim { display: block; position: fixed; inset: 0; z-index: 25; border: 0; background: rgba(3,19,43,.5); }
+  .portal-topbar { padding: 0 18px; }
+  .portal-menu-button { display: inline-grid; place-items: center; }
+  .portal-search { width: min(460px, 58vw); }
+}
+
+@media (max-width: 620px) {
+  .portal-search { display: none; }
+  .portal-user strong { max-width: 100px; }
+}

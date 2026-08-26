@@ -4,20 +4,13 @@ import CarVariant from "../../models/carVariant.js";
 import User from "../../models/user.js";
 import mongoose from "mongoose";
 
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-
-import { uploadBufferToCloudinary } from "../../utils/uploadToCloudinary.js";
+import cloudinary from "../../config/cloudinary.js";
+import {cloudinaryFolders,uploadBufferToCloudinary,} from "../../utils/uploadToCloudinary.js";
 import {
   hashPassword,
   isHashedPassword,
   verifyPassword,
 } from "../../utils/password.js";
-import { v2 as cloudinary } from 'cloudinary';
-
-
-
 export const getAllRenters = async (req, res) => {
     try {
       // Fetch all renters from the database
@@ -394,8 +387,6 @@ export const changeRenterProfilePicture = async (req, res) => {
   try {
     const { renterId } = req.params;
 
-    console.log('REQ FILE:', req.file);
-
     if (!req.file) {
       return res.status(400).json({ message: 'No image uploaded' });
     }
@@ -413,10 +404,10 @@ export const changeRenterProfilePicture = async (req, res) => {
     const oldPublicId = renter.profilePicturePublicId;
 
     // 1. Upload new image from buffer to Cloudinary
-    const uploadResult = await uploadBufferToCloudinary(req.file.buffer);
-
-    console.log('New Cloudinary public_id:', uploadResult.public_id);
-    console.log('Old Cloudinary public_id:', oldPublicId);
+    const uploadResult = await uploadBufferToCloudinary(
+      req.file.buffer,
+      cloudinaryFolders.renterProfile(renterId)
+    );
 
     // 2. Save new Cloudinary URL and public_id
     renter.profilePicture = uploadResult.secure_url;
@@ -427,12 +418,10 @@ export const changeRenterProfilePicture = async (req, res) => {
     // 3. Delete old Cloudinary image after DB update succeeds
     if (oldPublicId) {
       try {
-        const deleteResult = await cloudinary.uploader.destroy(oldPublicId, {
+        await cloudinary.uploader.destroy(oldPublicId, {
           resource_type: 'image',
           invalidate: true,
         });
-
-        console.log('Old image delete result:', deleteResult);
       } catch (deleteError) {
         console.error('Old profile picture delete failed:', deleteError);
       }

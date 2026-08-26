@@ -9,6 +9,7 @@ import {
   getCarVariantsByCarId,
   getRecommendedCarVariants,
   removeCarVariantImage,
+  reorderCarVariantImages,
   updateCarVariant,
   uploadCarVariantImages,
 } from "../controllers/carVariant/carVariant.controller.js";
@@ -67,6 +68,14 @@ router.post(
   requireAcceptedProvider,
   carUpload.array("files", 10),
   uploadCarVariantImages
+);
+
+router.put(
+  "/carVariant/:carVariantId/images/order",
+  authenticateAccessToken,
+  requireCarVariantProvider,
+  requireAcceptedProvider,
+  reorderCarVariantImages
 );
 
 router.delete(
