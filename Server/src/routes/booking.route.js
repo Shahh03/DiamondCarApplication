@@ -3,12 +3,19 @@ import express from "express";
 import {
   cancelBooking,
   checkBookingAvailability,
+  completeBooking,
   getbookingbyId,
   getUnavailableDates,
   getProviderBookings,
+  startBooking,
 } from "../controllers/booking/booking.controller.js";
 import { authenticateAccessToken } from "../middlewares/auth.js";
-import { requireBookingAccess ,  requireParamOwner } from "../middlewares/authorization.js";
+import {
+  requireAcceptedProvider,
+  requireBookingAccess,
+  requireParamOwner,
+  requireRole,
+} from "../middlewares/authorization.js";
 
 const router = express.Router();
 
@@ -27,6 +34,22 @@ router.put(
   authenticateAccessToken,
   requireBookingAccess({ renterOnly: true }),
   cancelBooking
+);
+router.put(
+  "/booking/start/:bookingId",
+  authenticateAccessToken,
+  requireRole("Provider"),
+  requireAcceptedProvider,
+  requireBookingAccess(),
+  startBooking
+);
+router.put(
+  "/booking/complete/:bookingId",
+  authenticateAccessToken,
+  requireRole("Provider"),
+  requireAcceptedProvider,
+  requireBookingAccess(),
+  completeBooking
 );
 router.get(
   "/booking/getbookingForProvider/:providerId",

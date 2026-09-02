@@ -48,7 +48,7 @@ const parseRentalDates = (startValue, endValue) => {
 // Inclusive date-only boundaries prevent same-day handover between renters.
 const bookingConflictQuery = (carVariant, startDate, endDate) => ({
   carVariant,
-  status: "Confirmed",
+  status: { $in: ["Confirmed", "InProgress"] },
   startDate: { $lte: endDate },
   endDate: { $gte: startDate },
 });
@@ -307,7 +307,7 @@ export const getStripePaymentStatus = async (req, res) => {
       bookingStatus: booking?.status ?? null,
       confirmed:
         payment?.paymentStatus === "Completed" &&
-        booking?.status === "Confirmed",
+        ["Confirmed", "InProgress", "Completed"].includes(booking?.status),
       refunded: refundedBecauseUnavailable || payment?.paymentStatus === "Refunded",
       message: refundedBecauseUnavailable
         ? "Those dates became unavailable during payment. Your payment was refunded."

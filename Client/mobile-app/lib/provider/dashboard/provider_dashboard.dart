@@ -1131,6 +1131,7 @@ class _BookingActivityRow extends StatelessWidget {
     final vehicle = _asMap(booking['vehicle']);
     final renter = _asMap(booking['renter']);
     final status = booking['status']?.toString() ?? 'Confirmed';
+    final statusLabel = status == 'InProgress' ? 'On Rent' : status;
     final start = DateTime.tryParse(booking['startDate']?.toString() ?? '');
     final statusStyle = _bookingStatusStyle(status);
 
@@ -1191,7 +1192,7 @@ class _BookingActivityRow extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  status,
+                  statusLabel,
                   style: TextStyle(
                     color: statusStyle.color,
                     fontSize: 9,
@@ -1375,6 +1376,8 @@ class _StatusStyle {
 
 _StatusStyle _bookingStatusStyle(String status) {
   switch (status) {
+    case 'InProgress':
+      return const _StatusStyle(_orange, Icons.key_rounded);
     case 'Completed':
       return const _StatusStyle(providerPrimary, Icons.check_rounded);
     case 'Cancelled':

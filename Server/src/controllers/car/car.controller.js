@@ -51,21 +51,17 @@ export const createCar = async (req, res) => {
 
 
 
-export const getAllCars = async (req, res) => {
-  try{
-    const cars = await Cars.find();
+export const getAllCars = async (_req, res) => {
+  try {
+    const cars = await Car.find()
+      .sort({ brand: 1, model: 1, year: -1 })
+      .lean();
 
-    if(cars.length == 0){
-      return res.status(404).json({ message: "No cars found" });
-
-    }
-
-    res.status(200).json(cars);
-
+    return res.status(200).json(cars);
+  } catch (error) {
+    console.error("Get cars error:", error);
+    return res.status(500).json({
+      message: "Could not load car models",
+    });
   }
-  catch(error){
-    res.status(500).json({ message: error.message });
-
-  }
-  
-}
+};

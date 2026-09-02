@@ -9,6 +9,8 @@ import 'provider_booking_details.dart';
 const _surface = Colors.white;
 const _success = Color(0xFF059669);
 const _danger = Color(0xFFDC2626);
+const _orange = Color(0xFFF97316);
+const _active = providerPrimary;
 
 class ProviderBookingsPage extends StatefulWidget {
   final String providerId;
@@ -71,9 +73,9 @@ class _ProviderBookingsPageState extends State<ProviderBookingsPage> {
     }
   }
 
-  void _openDetails(Map<String, dynamic> booking) {
+  Future<void> _openDetails(Map<String, dynamic> booking) async {
     final scope = ProviderDataScope.of(context);
-    Navigator.of(context).push(
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ProviderDataScope(
           provider: scope.provider,
@@ -82,6 +84,7 @@ class _ProviderBookingsPageState extends State<ProviderBookingsPage> {
         ),
       ),
     );
+    if (mounted) await _loadBookings();
   }
 
   List<Map<String, dynamic>> _forTab(String tab) {
@@ -685,9 +688,9 @@ class _BookingStatusBadge extends StatelessWidget {
 }
 
 Color _statusColor(String status) => switch (status) {
-      'Upcoming' => const Color(0xFF2563EB),
-      'Active' => _success,
-      'Completed' => const Color(0xFF64748B),
+      'Upcoming' => _active,
+      'Active' => _orange,
+      'Completed' => _success,
       'Cancelled' => _danger,
       _ => providerPrimary,
     };
@@ -696,6 +699,8 @@ String _displayStatus(Map<String, dynamic> booking) {
   final stored = _raw(booking['status']);
   if (stored == 'Cancelled') return 'Cancelled';
   if (stored == 'Completed') return 'Completed';
+  if (stored == 'InProgress') return 'Active';
+  if (stored == 'Confirmed') return 'Upcoming';
 
   final start = DateTime.tryParse(_raw(booking['startDate']))?.toLocal();
   final end = DateTime.tryParse(_raw(booking['endDate']))?.toLocal();

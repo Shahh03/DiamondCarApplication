@@ -109,14 +109,12 @@ export const getProviderDashboard = async (req, res) => {
     ] = await Promise.all([
       Booking.countDocuments({
         ...bookingOwnerQuery,
-        status: "Confirmed",
-        startDate: { $lte: todayEnd },
-        endDate: { $gte: todayStart },
+        status: "InProgress",
       }),
       Booking.countDocuments({
         ...bookingOwnerQuery,
         status: "Confirmed",
-        startDate: { $gt: todayEnd },
+        startDate: { $gte: todayStart },
       }),
       Booking.countDocuments({ ...bookingOwnerQuery, status: "Completed" }),
       Booking.countDocuments({ ...bookingOwnerQuery, status: "Cancelled" }),

@@ -3,8 +3,11 @@ import { Route, Routes } from 'react-router-dom';
 import ProviderPortalLayout from './layouts/provider/ProviderPortalLayout';
 import LoginPage from './pages/Authentication/Login';
 import SignUpPage from './pages/Authentication/SignUp';
+import AdminVehicleReviewsPage from './pages/admin/vehicles/AdminVehicleReviewsPage';
 import ProviderDashboardPage from './pages/provider/dashboard/ProviderDashboardPage';
+import ProviderBookingsPage from './pages/provider/bookings/ProviderBookingsPage';
 import ProviderFleetPage from './pages/provider/fleet/ProviderFleetPage';
+import ProviderFleetAddPage from './pages/provider/fleet/add/ProviderFleetAddPage';
 import ProviderFleetEditPage from './pages/provider/fleet/edit/ProviderFleetEditPage';
 import ProviderPlaceholderPage from './pages/provider/ProviderPlaceholderPage';
 import DefaultRoute from './routes/DefaultRoute';
@@ -33,8 +36,12 @@ export default function App() {
             element={<ProviderFleetEditPage />}
           />
           <Route
+            path="/provider/fleet/add"
+            element={<ProviderFleetAddPage />}
+          />
+          <Route
             path="/provider/bookings"
-            element={<ProviderPlaceholderPage />}
+            element={<ProviderBookingsPage />}
           />
           <Route
             path="/provider/earnings"
@@ -50,11 +57,11 @@ export default function App() {
       <Route element={<RoleGuard role="Admin" />}>
         <Route
           path="/admin/dashboard"
-          element={
-            <main className="auth-placeholder">
-              Admin dashboard comes next.
-            </main>
-          }
+          element={<AdminVehicleReviewsPage />}
+        />
+        <Route
+          path="/admin/vehicles"
+          element={<AdminVehicleReviewsPage />}
         />
       </Route>
 

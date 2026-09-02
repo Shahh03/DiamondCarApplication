@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'api/booking_api.dart';
@@ -86,9 +85,10 @@ class _BookingDetailsPageState extends State<BookingDetailsPage> {
     return text.isEmpty ? 'Not provided' : text;
   }
 
-  String _capitalize(dynamic value) {
+  String _bookingStatusLabel(dynamic value) {
     final text = value?.toString().trim() ?? '';
     if (text.isEmpty) return 'Unknown';
+    if (text.toLowerCase() == 'inprogress') return 'Rental in progress';
     return text[0].toUpperCase() + text.substring(1).toLowerCase();
   }
 
@@ -206,6 +206,7 @@ class _BookingDetailsPageState extends State<BookingDetailsPage> {
 
     final images = _getValidImages(carVariant['images']);
     final status = _displayValue(booking['status']);
+    final statusLabel = _bookingStatusLabel(status);
     final statusStyle = _statusStyle(status);
     final carName = _joinAvailable([car['brand'], car['model']]);
     final location = _joinAvailable(
@@ -244,7 +245,7 @@ class _BookingDetailsPageState extends State<BookingDetailsPage> {
                       year: _displayValue(car['year']),
                       company: _displayValue(provider['companyName']),
                       location: location.isEmpty ? 'Location not provided' : location,
-                      status: _capitalize(status),
+                      status: statusLabel,
                       statusStyle: statusStyle,
                     ),
                     const SizedBox(height: 18),
@@ -275,7 +276,7 @@ class _BookingDetailsPageState extends State<BookingDetailsPage> {
                           _DetailRow(
                             icon: Icons.info_outline_rounded,
                             label: 'Status',
-                            value: _capitalize(status),
+                            value: statusLabel,
                             valueColor: statusStyle.foreground,
                           ),
                         ],
@@ -355,6 +356,10 @@ class _BookingDetailsPageState extends State<BookingDetailsPage> {
                       amount: _paymentAmount(payment),
                       method: _displayValue(payment['paymentMethod']),
                     ),
+                    if (status.toLowerCase() == 'inprogress') ...[
+                      const SizedBox(height: 18),
+                      const _RentalInProgressNotice(),
+                    ],
                   ],
                 ),
               ),
@@ -498,6 +503,7 @@ class _BookingDetailsPageState extends State<BookingDetailsPage> {
         return const _StatusStyle(Color(0xFF047857), Color(0xFFD1FAE5));
       case 'active':
       case 'ongoing':
+      case 'inprogress':
         return const _StatusStyle(Color(0xFF1D4ED8), Color(0xFFDBEAFE));
       case 'completed':
         return const _StatusStyle(Color(0xFF475569), Color(0xFFE2E8F0));
@@ -929,6 +935,50 @@ class _SpecsGrid extends StatelessWidget {
       },
     );
   }
+}
+
+class _RentalInProgressNotice extends StatelessWidget {
+  const _RentalInProgressNotice();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFDBEAFE),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFBFDBFE)),
+        ),
+        child: const Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.key_rounded, color: Color(0xFF1D4ED8)),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Rental in progress',
+                    style: TextStyle(
+                      color: Color(0xFF1E3A8A),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'The vehicle has been collected. This booking can no longer be cancelled.',
+                    style: TextStyle(
+                      color: Color(0xFF1E40AF),
+                      fontSize: 12,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
 class _PaymentCard extends StatelessWidget {

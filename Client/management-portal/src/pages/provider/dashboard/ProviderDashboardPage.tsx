@@ -75,9 +75,8 @@ export default function ProviderDashboardPage() {
   const metrics = useMemo(() => {
     const fleet = data?.fleet ?? [];
     const bookings = data?.bookings ?? [];
-    const now = new Date();
     const active = bookings.filter((booking) =>
-      booking.status === 'Confirmed' && (!booking.endDate || new Date(booking.endDate) >= now),
+      booking.status === 'InProgress',
     );
     const rentedIds = new Set(active.map((booking) => booking.carVariant?._id).filter(Boolean));
     const available = fleet.filter((vehicle) => vehicle.isAvailable && !rentedIds.has(vehicle._id)).length;
@@ -176,7 +175,8 @@ function BookingRow({ booking, currency }: { booking: BookingRecord; currency: s
   const car = booking.carVariant?.car;
   const customer = booking.renter?.name || booking.renter?.username || 'Renter';
   const status = booking.status || 'Confirmed';
-  return <tr><td>#{booking._id.slice(-7).toUpperCase()}</td><td><div className="customer-cell"><span>{customer.charAt(0).toUpperCase()}</span>{customer}</div></td><td>{[car?.brand, car?.model].filter(Boolean).join(' ') || 'Vehicle'}</td><td>{dateLabel(booking.startDate)}</td><td>{dateLabel(booking.endDate)}</td><td><span className={`booking-status ${status.toLowerCase()}`}>{status}</span></td><td>{money(bookingAmount(booking), currency)}</td></tr>;
+  const statusLabel = status === 'InProgress' ? 'On Rent' : status;
+  return <tr><td>#{booking._id.slice(-7).toUpperCase()}</td><td><div className="customer-cell"><span>{customer.charAt(0).toUpperCase()}</span>{customer}</div></td><td>{[car?.brand, car?.model].filter(Boolean).join(' ') || 'Vehicle'}</td><td>{dateLabel(booking.startDate)}</td><td>{dateLabel(booking.endDate)}</td><td><span className={`booking-status ${status.toLowerCase()}`}>{statusLabel}</span></td><td>{money(bookingAmount(booking), currency)}</td></tr>;
 }
 
 function QuickAction({ to, icon, title, subtitle, teal, orange, purple }: { to: string; icon: ReactNode; title: string; subtitle: string; teal?: boolean; orange?: boolean; purple?: boolean }) {

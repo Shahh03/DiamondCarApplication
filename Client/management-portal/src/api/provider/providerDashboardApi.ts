@@ -32,7 +32,9 @@ export interface BookingRecord {
   startDate?: string;
   endDate?: string;
   totalPrice?: number;
-  status?: 'Confirmed' | 'Cancelled' | 'Completed';
+  status?: 'Confirmed' | 'InProgress' | 'Cancelled' | 'Completed';
+  startedAt?: string;
+  completedAt?: string;
   createdAt?: string;
   payment?: {
     amount?: number;

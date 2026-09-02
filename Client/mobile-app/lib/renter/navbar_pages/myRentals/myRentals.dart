@@ -131,10 +131,10 @@ class _RenterMyRentalsState extends State<RenterMyRentals> {
     return name.split(RegExp(r'\s+')).first;
   }
 
-  void _openBookingDetails(dynamic bookingId) {
+  Future<void> _openBookingDetails(dynamic bookingId) async {
     if (bookingId == null) return;
 
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => BookingDetailsPage(
@@ -142,6 +142,7 @@ class _RenterMyRentalsState extends State<RenterMyRentals> {
         ),
       ),
     );
+    if (mounted) await getRenterBookings();
   }
 
   @override
@@ -403,6 +404,7 @@ class _RentalCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final statusStyle = _statusStyle(status);
+    final statusLabel = _statusLabel(status);
 
     return Material(
       color: Colors.white,
@@ -427,7 +429,7 @@ class _RentalCard extends StatelessWidget {
             children: [
               _RentalImage(
                 images: images,
-                status: status,
+                status: statusLabel,
                 statusStyle: statusStyle,
               ),
               Padding(
@@ -523,6 +525,7 @@ class _RentalCard extends StatelessWidget {
         return const _StatusStyle(Color(0xFF047857), Color(0xFFD1FAE5));
       case 'active':
       case 'ongoing':
+      case 'inprogress':
         return const _StatusStyle(Color(0xFF1D4ED8), Color(0xFFDBEAFE));
       case 'completed':
         return const _StatusStyle(Color(0xFF475569), Color(0xFFE2E8F0));
@@ -534,6 +537,13 @@ class _RentalCard extends StatelessWidget {
       default:
         return const _StatusStyle(Color(0xFF475569), Color(0xFFF1F5F9));
     }
+  }
+
+  static String _statusLabel(String value) {
+    final status = value.trim();
+    if (status.isEmpty) return 'Unknown';
+    if (status.toLowerCase() == 'inprogress') return 'On Rent';
+    return status[0].toUpperCase() + status.substring(1).toLowerCase();
   }
 }
 

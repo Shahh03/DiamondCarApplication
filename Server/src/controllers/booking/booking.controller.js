@@ -18,7 +18,12 @@ export const getProviderBookings = async (req, res) => {
     const bookings = await Booking.find({
       carVariant: { $in: variantIds.map((variant) => variant._id) },
     })
-      .populate("renter", "name phoneNumber profilePicture")
+      .populate(
+        "renter",
+        "name username email phoneNumber profilePicture nationality birthDate " +
+          "occupation gender isVerified drivingLicenseNumber idCardNumber " +
+          "location currency"
+      )
       .populate({
         path: "carVariant",
         select:
@@ -65,7 +70,7 @@ const parseRentalDates = (startValue, endValue) => {
 
 export const confirmedConflictQuery = (carVariantId, startDate, endDate) => ({
   carVariant: carVariantId,
-  status: "Confirmed",
+  status: { $in: ["Confirmed", "InProgress"] },
   startDate: { $lte: endDate },
   endDate: { $gte: startDate },
 });
@@ -126,7 +131,7 @@ export const getUnavailableDates = async (req, res) => {
     today.setUTCHours(0, 0, 0, 0);
     const bookings = await Booking.find({
       carVariant: carVariantId,
-      status: "Confirmed",
+      status: { $in: ["Confirmed", "InProgress"] },
       endDate: { $gte: today },
     })
       .select("startDate endDate -_id")
@@ -153,6 +158,11 @@ export const cancelBooking = async (req, res) => {
     if (!booking) return res.status(404).json({ message: "Booking not found" });
     if (booking.status === "Cancelled") {
       return res.status(400).json({ message: "Booking is already cancelled" });
+    }
+    if (booking.status === "InProgress") {
+      return res.status(400).json({
+        message: "Cannot cancel a rental that is already in progress",
+      });
     }
     if (booking.status === "Completed" || booking.endDate < new Date()) {
       return res.status(400).json({
@@ -193,6 +203,134 @@ export const cancelBooking = async (req, res) => {
     console.error("Cancel booking error:", error);
     return res.status(500).json({
       message: "Could not cancel booking",
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
+    });
+  }
+};
+
+export const startBooking = async (req, res) => {
+  try {
+    const currentBooking = await Booking.findById(req.params.bookingId).select(
+      "status carVariant"
+    );
+
+    if (!currentBooking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    const messageByStatus = {
+      InProgress: "This rental is already in progress",
+      Completed: "A completed rental cannot be started",
+      Cancelled: "A cancelled booking cannot be started",
+    };
+
+    if (currentBooking.status !== "Confirmed") {
+      return res.status(409).json({
+        message:
+          messageByStatus[currentBooking.status] ??
+          "This booking cannot be started",
+      });
+    }
+
+    const vehicleIsOnRent = await Booking.exists({
+      _id: { $ne: currentBooking._id },
+      carVariant: currentBooking.carVariant,
+      status: "InProgress",
+    });
+
+    if (vehicleIsOnRent) {
+      return res.status(409).json({
+        message:
+          "This vehicle is already on rent. Complete its active rental " +
+          "before starting this booking.",
+      });
+    }
+
+    const booking = await Booking.findOneAndUpdate(
+      {
+        _id: req.params.bookingId,
+        status: "Confirmed",
+      },
+      {
+        $set: {
+          status: "InProgress",
+          startedAt: new Date(),
+          completedAt: null,
+        },
+      },
+      { new: true, runValidators: true }
+    ).select("status startDate endDate startedAt completedAt");
+
+    if (booking) {
+      return res.status(200).json({
+        message: "Rental started successfully",
+        booking,
+      });
+    }
+
+    const latestBooking = await Booking.findById(req.params.bookingId).select(
+      "status"
+    );
+
+    return res.status(409).json({
+      message:
+        messageByStatus[latestBooking?.status] ??
+        "This booking could not be started because its status changed. Refresh and try again.",
+    });
+  } catch (error) {
+    console.error("Start booking error:", error);
+    return res.status(500).json({
+      message: "Could not start rental",
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
+    });
+  }
+};
+
+export const completeBooking = async (req, res) => {
+  try {
+    const booking = await Booking.findOneAndUpdate(
+      {
+        _id: req.params.bookingId,
+        status: "InProgress",
+      },
+      {
+        $set: {
+          status: "Completed",
+          completedAt: new Date(),
+        },
+      },
+      { new: true, runValidators: true }
+    ).select("status startDate endDate startedAt completedAt");
+
+    if (booking) {
+      return res.status(200).json({
+        message: "Rental completed successfully",
+        booking,
+      });
+    }
+
+    const currentBooking = await Booking.findById(req.params.bookingId).select(
+      "status"
+    );
+    if (!currentBooking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    const messageByStatus = {
+      Confirmed: "Start the rental before marking it as completed",
+      Completed: "Rental is already completed",
+      Cancelled: "A cancelled booking cannot be completed",
+    };
+
+    return res.status(409).json({
+      message:
+        messageByStatus[currentBooking.status] ??
+        "Booking cannot be marked as completed",
+    });
+  } catch (error) {
+    console.error("Complete booking error:", error);
+    return res.status(500).json({
+      message: "Could not complete rental",
       ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }

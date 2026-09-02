@@ -34,6 +34,36 @@ class ProviderBookingApi {
         .toList();
   }
 
+  static Future<Map<String, dynamic>> startBooking({
+    required String bookingId,
+  }) => _transition(
+        path: '/booking/start/${Uri.encodeComponent(bookingId)}',
+        fallback: 'Could not start the rental.',
+      );
+
+  static Future<Map<String, dynamic>> completeBooking({
+    required String bookingId,
+  }) => _transition(
+        path: '/booking/complete/${Uri.encodeComponent(bookingId)}',
+        fallback: 'Could not complete the rental.',
+      );
+
+  static Future<Map<String, dynamic>> _transition({
+    required String path,
+    required String fallback,
+  }) async {
+    final response = await AuthenticatedClient.put(path);
+    final decoded = _decode(response.body);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(_message(decoded, fallback));
+    }
+
+    return decoded is Map
+        ? Map<String, dynamic>.from(decoded)
+        : <String, dynamic>{'message': fallback};
+  }
+
   static dynamic _decode(String body) {
     if (body.trim().isEmpty) return null;
     try {

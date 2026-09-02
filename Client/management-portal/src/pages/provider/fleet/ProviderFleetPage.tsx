@@ -13,7 +13,7 @@ import {
   KeyRounded,
   SearchRounded,
 } from '@mui/icons-material';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   useEffect,
   useMemo,
@@ -25,9 +25,11 @@ import { Link, useSearchParams } from 'react-router-dom';
 
 import {
   getProviderFleet,
+  submitProviderFleetVehicleForReview,
   type FleetAvailability,
   type ProviderFleetBooking,
   type ProviderFleetVehicle,
+  type VehicleApprovalStatus,
 } from '../../../api/provider/providerFleetApi';
 import { readSession } from '../../../core/session';
 
@@ -42,37 +44,10 @@ function bookingVehicleId(booking: ProviderFleetBooking): string | undefined {
   return booking.carVariant?._id;
 }
 
-function startOfUtcDay(value: Date): number {
-  const date = new Date(value);
-  date.setUTCHours(0, 0, 0, 0);
-  return date.getTime();
-}
-
 function activeRentalVehicleIds(bookings: ProviderFleetBooking[]): Set<string> {
-  const today = startOfUtcDay(new Date());
-
   return new Set(
     bookings
-      .filter((booking) => {
-        if (
-          booking.status !== 'Confirmed' ||
-          !booking.startDate ||
-          !booking.endDate
-        ) {
-          return false;
-        }
-
-        const start = new Date(booking.startDate);
-        const end = new Date(booking.endDate);
-        if (
-          Number.isNaN(start.getTime()) ||
-          Number.isNaN(end.getTime())
-        ) {
-          return false;
-        }
-
-        return startOfUtcDay(start) <= today && startOfUtcDay(end) >= today;
-      })
+      .filter((booking) => booking.status === 'InProgress')
       .map(bookingVehicleId)
       .filter((id): id is string => Boolean(id)),
   );
@@ -139,6 +114,7 @@ export default function ProviderFleetPage() {
   const providerId = readSession()?.user._id ?? '';
   const currency = (readSession()?.user.currency || 'AED').toUpperCase();
   const [searchParams, setSearchParams] = useSearchParams();
+  const queryClient = useQueryClient();
 
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
   const [availability, setAvailability] =
@@ -149,11 +125,21 @@ export default function ProviderFleetPage() {
   const [page, setPage] = useState(1);
   const [selectedVehicle, setSelectedVehicle] =
     useState<ProviderFleetVehicle | null>(null);
+  const [actionError, setActionError] = useState('');
 
   const fleetQuery = useQuery({
     queryKey: ['provider', providerId, 'fleet'],
     queryFn: () => getProviderFleet(providerId),
     enabled: Boolean(providerId),
+  });
+
+  const resubmitMutation = useMutation({
+    mutationFn: submitProviderFleetVehicleForReview,
+    onSuccess: async () => {
+      setActionError('');
+      await queryClient.invalidateQueries({ queryKey: ['provider', providerId] });
+    },
+    onError: (error: Error) => setActionError(error.message),
   });
 
   useEffect(() => {
@@ -309,16 +295,16 @@ export default function ProviderFleetPage() {
           <p>Manage your vehicles, availability and pricing.</p>
         </div>
 
-        <button
+        <Link
           className="provider-fleet-add"
-          type="button"
-          disabled
-          title="Vehicle creation will be implemented next"
+          to="/provider/fleet/add"
         >
           <AddRounded />
           Add Vehicle
-        </button>
+        </Link>
       </section>
+
+      {actionError && <div className="provider-fleet-action-error" role="alert">{actionError}</div>}
 
       <section className="provider-fleet-kpis" aria-label="Fleet summary">
         <FleetKpi
@@ -341,7 +327,7 @@ export default function ProviderFleetPage() {
           label="On Rent"
           value={counts['on-rent']}
           icon={<KeyRounded />}
-          tone="blue"
+          tone="orange"
           active={availability === 'on-rent'}
           onClick={() => changeAvailability('on-rent')}
         />
@@ -349,7 +335,7 @@ export default function ProviderFleetPage() {
           label="Unavailable"
           value={counts.unavailable}
           icon={<BlockOutlined />}
-          tone="orange"
+          tone="red"
           active={availability === 'unavailable'}
           onClick={() => changeAvailability('unavailable')}
         />
@@ -455,7 +441,7 @@ export default function ProviderFleetPage() {
                     <th>Registration</th>
                     <th>Color</th>
                     <th>Price / Day</th>
-                    <th>Availability</th>
+                    <th>Status</th>
                     <th>Photos</th>
                     <th>Actions</th>
                   </tr>
@@ -484,7 +470,10 @@ export default function ProviderFleetPage() {
                           {formatMoney(vehicle.rentalPricePerDay, currency)}
                         </td>
                         <td>
-                          <AvailabilityBadge availability={currentAvailability} />
+                          <div className="provider-fleet-status-stack">
+                            <ApprovalBadge status={vehicle.approvalStatus} />
+                            <AvailabilityBadge availability={currentAvailability} />
+                          </div>
                         </td>
                         <td>
                           <span className="provider-fleet-photo-count">
@@ -509,6 +498,16 @@ export default function ProviderFleetPage() {
                               <EditOutlined />
                               Edit
                             </Link>
+                            {vehicle.approvalStatus === 'Rejected' && (
+                              <button
+                                className="provider-fleet-resubmit"
+                                type="button"
+                                disabled={resubmitMutation.isPending}
+                                onClick={() => resubmitMutation.mutate(vehicle._id)}
+                              >
+                                Resubmit
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -534,7 +533,10 @@ export default function ProviderFleetPage() {
                         {vehicle.car?.year || 'Year not provided'} ·{' '}
                         {vehicle.registrationNumber || 'No registration'}
                       </small>
-                      <AvailabilityBadge availability={currentAvailability} />
+                      <span className="provider-fleet-mobile-statuses">
+                        <ApprovalBadge status={vehicle.approvalStatus} />
+                        <AvailabilityBadge availability={currentAvailability} />
+                      </span>
                       <b>{formatMoney(vehicle.rentalPricePerDay, currency)} / day</b>
                     </span>
                     <span className="provider-fleet-mobile-actions">
@@ -616,7 +618,7 @@ function FleetKpi({
   label: string;
   value: number;
   icon: ReactNode;
-  tone: 'blue' | 'teal' | 'orange';
+  tone: 'blue' | 'teal' | 'orange' | 'red';
   active: boolean;
   onClick: () => void;
 }) {
@@ -711,6 +713,19 @@ function AvailabilityBadge({
   return (
     <span className={`provider-fleet-badge ${availability}`}>
       {availabilityLabel(availability)}
+    </span>
+  );
+}
+
+function ApprovalBadge({
+  status,
+}: {
+  status?: VehicleApprovalStatus;
+}) {
+  const currentStatus = status ?? 'Approved';
+  return (
+    <span className={`provider-fleet-approval ${currentStatus.toLowerCase()}`}>
+      {currentStatus === 'Pending' ? 'Pending Review' : currentStatus}
     </span>
   );
 }
@@ -910,6 +925,19 @@ function VehicleDrawer({
             <strong>{formatMoney(vehicle.depositAmount, currency)}</strong>
           </span>
         </div>
+
+        <DrawerSection title="Listing review">
+          <div className="provider-fleet-review-details">
+            <ApprovalBadge status={vehicle.approvalStatus} />
+            <p>
+              {vehicle.approvalStatus === 'Pending'
+                ? 'This vehicle is waiting for admin approval and is not visible to renters.'
+                : vehicle.approvalStatus === 'Rejected'
+                  ? vehicle.rejectionReason || 'The admin requested changes before approval.'
+                  : 'This vehicle is approved for renter listings.'}
+            </p>
+          </div>
+        </DrawerSection>
 
         <DrawerSection title="Vehicle information">
           <dl className="provider-fleet-details-grid">

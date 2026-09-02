@@ -48,6 +48,7 @@ th,td { padding:10px 12px; border-bottom:1px solid #edf0f4; text-align:left; whi
 th { color:#667287; font-size:9px; text-transform:uppercase; letter-spacing:.04em; }
 .customer-cell { display:flex; align-items:center; gap:7px; }.customer-cell span { width:26px; height:26px; display:grid; place-items:center; border-radius:50%; background:#dbeafe; color:#0e62e6; font-weight:900; }
 .booking-status { padding:5px 8px; border-radius:5px; background:#e8f1ff; color:#075fe2; font-size:9px; font-weight:700; }.booking-status.completed { background:#dcf8ef; color:#078665; }.booking-status.cancelled { background:#fee9e7; color:#c9372c; }
+.booking-status.inprogress { background:#e0f2fe; color:#0369a1; }
 .dashboard-empty { min-height:210px; display:grid; place-items:center; color:#7b8798; }
 .quick-card { padding:18px; }.quick-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:18px; }
 .quick-action { min-height:86px; padding:13px; border:1px solid #e0e6ef; border-radius:10px; display:grid; grid-template-columns:45px 1fr 16px; align-items:center; gap:10px; color:#0b1730; text-decoration:none; transition:transform .16s ease,box-shadow .16s ease; }

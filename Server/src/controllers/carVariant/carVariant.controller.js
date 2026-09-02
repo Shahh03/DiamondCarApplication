@@ -418,7 +418,7 @@ export const archiveCarVariant = async (req, res) => {
     today.setUTCHours(0, 0, 0, 0);
     const blockingBooking = await Booking.exists({
       carVariant: variant._id,
-      status: "Confirmed",
+      status: { $in: ["Confirmed", "InProgress"] },
       endDate: { $gte: today },
     });
     if (blockingBooking) {

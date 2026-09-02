@@ -27,8 +27,16 @@ const bookingSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["Confirmed", "Cancelled", "InProgress", "Completed"],
+      enum: ["Confirmed", "InProgress", "Completed", "Cancelled"],
       default: "Confirmed",
+    },
+    startedAt: {
+      type: Date,
+      default: null,
+    },
+    completedAt: {
+      type: Date,
+      default: null,
     },
     payment: {
       type: mongoose.Schema.Types.ObjectId,
@@ -45,9 +53,28 @@ const bookingSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-bookingSchema.index({ carVariant: 1, status: 1, startDate: 1, endDate: 1 });
+bookingSchema.index({
+  carVariant: 1,
+  status: 1,
+  startDate: 1,
+  endDate: 1,
+});
+
 bookingSchema.index({ renter: 1, createdAt: -1 });
+
 bookingSchema.index({ payment: 1 }, { unique: true });
+
+// A physical vehicle can have only one active rental.
+bookingSchema.index(
+  { carVariant: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      status: "InProgress",
+    },
+    name: "one_active_rental_per_vehicle",
+  }
+);
 
 const Booking = mongoose.model("Booking", bookingSchema);
 

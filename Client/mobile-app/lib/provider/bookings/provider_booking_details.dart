@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
+import '../api/provider_booking_api.dart';
 import '../provider_data_scope.dart';
 import '../provider_ui.dart';
 
@@ -11,13 +12,29 @@ const _success = Color(0xFF059669);
 const _danger = Color(0xFFDC2626);
 const _orange = Color(0xFFEA580C);
 
-class ProviderBookingDetailsPage extends StatelessWidget {
+class ProviderBookingDetailsPage extends StatefulWidget {
   final Map<String, dynamic> booking;
 
   const ProviderBookingDetailsPage({
     super.key,
     required this.booking,
   });
+
+  @override
+  State<ProviderBookingDetailsPage> createState() =>
+      _ProviderBookingDetailsPageState();
+}
+
+class _ProviderBookingDetailsPageState
+    extends State<ProviderBookingDetailsPage> {
+  late Map<String, dynamic> _booking;
+  bool _isUpdating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _booking = Map<String, dynamic>.from(widget.booking);
+  }
 
   Future<void> _copyReference(BuildContext context, String reference) async {
     if (reference.isEmpty) return;
@@ -28,8 +45,76 @@ class ProviderBookingDetailsPage extends StatelessWidget {
     );
   }
 
+  Future<void> _changeStatus({required bool start}) async {
+    final bookingId = _raw(_booking['_id']);
+    if (bookingId.isEmpty || _isUpdating) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(start ? 'Start this rental?' : 'Complete this rental?'),
+        content: Text(
+          start
+              ? 'Confirm that the renter has collected the vehicle.'
+              : 'Confirm that the vehicle has been returned.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: start ? providerPrimary : _success,
+            ),
+            child: Text(start ? 'Start rental' : 'Complete rental'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isUpdating = true);
+    try {
+      final result = start
+          ? await ProviderBookingApi.startBooking(bookingId: bookingId)
+          : await ProviderBookingApi.completeBooking(bookingId: bookingId);
+      if (!mounted) return;
+
+      final updated = _map(result['booking']);
+      setState(() {
+        _booking = <String, dynamic>{..._booking, ...updated};
+        _isUpdating = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _valueOr(
+              result['message'],
+              start
+                  ? 'Rental started successfully.'
+                  : 'Rental completed successfully.',
+            ),
+          ),
+          backgroundColor: _success,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isUpdating = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_cleanError(error)),
+          backgroundColor: _danger,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final booking = _booking;
     final renter = _map(booking['renter']);
     final variant = _map(booking['carVariant']);
     final car = _map(variant['car']);
@@ -150,7 +235,12 @@ class ProviderBookingDetailsPage extends StatelessWidget {
             payment: payment,
           ),
           const SizedBox(height: 18),
-          const _PortalNotice(),
+          _BookingLifecyclePanel(
+            status: status,
+            isUpdating: _isUpdating,
+            onStart: () => _changeStatus(start: true),
+            onComplete: () => _changeStatus(start: false),
+          ),
         ],
       ),
     );
@@ -658,8 +748,18 @@ class _PaymentRow extends StatelessWidget {
       );
 }
 
-class _PortalNotice extends StatelessWidget {
-  const _PortalNotice();
+class _BookingLifecyclePanel extends StatelessWidget {
+  final String status;
+  final bool isUpdating;
+  final VoidCallback onStart;
+  final VoidCallback onComplete;
+
+  const _BookingLifecyclePanel({
+    required this.status,
+    required this.isUpdating,
+    required this.onStart,
+    required this.onComplete,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
@@ -669,31 +769,88 @@ class _PortalNotice extends StatelessWidget {
           borderRadius: BorderRadius.circular(17),
           border: Border.all(color: const Color(0xFFBFDBFE)),
         ),
-        child: const Row(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.admin_panel_settings_outlined, color: providerPrimary),
-            SizedBox(width: 10),
+            Icon(
+              status == 'Active'
+                  ? Icons.key_rounded
+                  : status == 'Completed'
+                      ? Icons.check_circle_outline_rounded
+                      : Icons.event_available_outlined,
+              color: status == 'Active' ? _success : providerPrimary,
+            ),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Managed in the web portal',
-                    style: TextStyle(
+                    switch (status) {
+                      'Upcoming' => 'Vehicle handover',
+                      'Active' => 'Rental in progress',
+                      'Completed' => 'Rental completed',
+                      _ => 'No booking action available',
+                    },
+                    style: const TextStyle(
                       color: providerPrimaryDark,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
-                  SizedBox(height: 3),
+                  const SizedBox(height: 3),
                   Text(
-                    'Use the private management portal for booking administration and refund actions.',
-                    style: TextStyle(
+                    switch (status) {
+                      'Upcoming' => 'Start the rental after the renter collects the vehicle.',
+                      'Active' => 'Complete the rental after the vehicle is returned.',
+                      'Completed' => 'No further lifecycle action is required.',
+                      'Cancelled' => 'This booking was cancelled and cannot be started.',
+                      _ => 'Refresh the booking before trying another action.',
+                    },
+                    style: const TextStyle(
                       color: providerPrimaryDark,
                       fontSize: 11,
                       height: 1.4,
                     ),
                   ),
+                  if (status == 'Upcoming' || status == 'Active') ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: isUpdating
+                            ? null
+                            : status == 'Upcoming'
+                                ? onStart
+                                : onComplete,
+                        icon: isUpdating
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Icon(
+                                status == 'Upcoming'
+                                    ? Icons.key_rounded
+                                    : Icons.check_circle_outline_rounded,
+                              ),
+                        label: Text(
+                          isUpdating
+                              ? 'Saving…'
+                              : status == 'Upcoming'
+                                  ? 'Start rental'
+                                  : 'Complete rental',
+                        ),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: status == 'Upcoming'
+                              ? providerPrimary
+                              : _success,
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -703,9 +860,9 @@ class _PortalNotice extends StatelessWidget {
 }
 
 Color _statusColor(String status) => switch (status) {
-      'Active' => _success,
+      'Active' => _orange,
       'Upcoming' => providerPrimary,
-      'Completed' => providerMuted,
+      'Completed' => _success,
       'Cancelled' => _danger,
       _ => _orange,
     };
@@ -714,6 +871,8 @@ String _displayStatus(Map<String, dynamic> booking) {
   final stored = _raw(booking['status']);
   if (stored == 'Cancelled') return 'Cancelled';
   if (stored == 'Completed') return 'Completed';
+  if (stored == 'InProgress') return 'Active';
+  if (stored == 'Confirmed') return 'Upcoming';
 
   final start = DateTime.tryParse(_raw(booking['startDate']))?.toLocal();
   final end = DateTime.tryParse(_raw(booking['endDate']))?.toLocal();
@@ -753,6 +912,14 @@ String _value(dynamic value) {
   final text = _raw(value);
   return text.isEmpty ? 'Not provided' : text;
 }
+
+String _valueOr(dynamic value, String fallback) {
+  final text = _raw(value);
+  return text.isEmpty ? fallback : text;
+}
+
+String _cleanError(Object error) =>
+    error.toString().replaceFirst('Exception: ', '');
 
 String _shortReference(String value) =>
     value.length <= 8 ? value.toUpperCase() : value.substring(value.length - 8).toUpperCase();
