@@ -4,9 +4,17 @@ import {
   CloudUploadOutlined,
   CloseRounded,
   DirectionsCarOutlined,
+  DragIndicatorRounded,
 } from '@mui/icons-material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type DragEvent,
+  type FormEvent,
+} from 'react';
+import { flushSync } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 
 import {
@@ -40,29 +48,40 @@ const EMPTY_FORM: AddVehicleForm = {
   expiryDate: '',
 };
 
+interface PendingPhoto {
+  id: string;
+  file: File;
+  url: string;
+}
+
+function photoId(): string {
+  return `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export default function ProviderFleetAddPage() {
   const providerId = readSession()?.user._id ?? '';
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [form, setForm] = useState(EMPTY_FORM);
-  const [files, setFiles] = useState<File[]>([]);
+  const [photos, setPhotos] = useState<PendingPhoto[]>([]);
+  const [draggedPhotoId, setDraggedPhotoId] = useState<string | null>(null);
   const [createdVehicleId, setCreatedVehicleId] = useState('');
   const [error, setError] = useState('');
+  const previewUrls = useRef(new Set<string>());
+  const photoElements = useRef(new Map<string, HTMLElement>());
+  const lastDragTargetId = useRef<string | null>(null);
 
   const carQuery = useQuery({
     queryKey: ['car-catalogue'],
     queryFn: getCarCatalog,
   });
 
-  const previews = useMemo(
-    () => files.map((file) => ({ file, url: URL.createObjectURL(file) })),
-    [files],
-  );
-
-  useEffect(
-    () => () => previews.forEach((preview) => URL.revokeObjectURL(preview.url)),
-    [previews],
-  );
+  useEffect(() => {
+    return () => {
+      previewUrls.current.forEach((url) => URL.revokeObjectURL(url));
+      previewUrls.current.clear();
+    };
+  }, []);
 
   const selectedCar = carQuery.data?.find((car) => car._id === form.carId);
 
@@ -87,7 +106,10 @@ export default function ProviderFleetAddPage() {
         setCreatedVehicleId(vehicleId);
       }
 
-      await uploadProviderFleetVehicleImages(vehicleId, files);
+      await uploadProviderFleetVehicleImages(
+        vehicleId,
+        photos.map((photo) => photo.file),
+      );
       return vehicleId;
     },
     onSuccess: async () => {
@@ -110,8 +132,116 @@ export default function ProviderFleetAddPage() {
     const images = Array.from(selected).filter((file) =>
       file.type.startsWith('image/'),
     );
-    setFiles((current) => [...current, ...images].slice(0, 10));
+    const remainingSlots = Math.max(0, 10 - photos.length);
+    if (images.length > remainingSlots) {
+      setError(
+        remainingSlots === 0
+          ? 'You already selected the maximum of 10 photos.'
+          : `You can select only ${remainingSlots} more photo${remainingSlots === 1 ? '' : 's'}.`,
+      );
+      return;
+    }
+
+    const nextPhotos = images.map((file) => {
+      const url = URL.createObjectURL(file);
+      previewUrls.current.add(url);
+      return { id: photoId(), file, url };
+    });
+    setPhotos((current) => [...current, ...nextPhotos]);
     setError('');
+  }
+
+  function removePhoto(photoIdToRemove: string) {
+    setPhotos((current) => {
+      const photo = current.find((item) => item.id === photoIdToRemove);
+      if (photo) {
+        URL.revokeObjectURL(photo.url);
+        previewUrls.current.delete(photo.url);
+      }
+      return current.filter((item) => item.id !== photoIdToRemove);
+    });
+  }
+
+  function animatePhotoReorder(
+    reorder: (current: PendingPhoto[]) => PendingPhoto[],
+    movingPhotoId?: string,
+  ) {
+    const previousPositions = new Map<string, DOMRect>();
+    photoElements.current.forEach((element, id) => {
+      previousPositions.set(id, element.getBoundingClientRect());
+    });
+
+    flushSync(() => setPhotos(reorder));
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    photoElements.current.forEach((element, id) => {
+      if (id === movingPhotoId) return;
+      const previousPosition = previousPositions.get(id);
+      if (!previousPosition) return;
+
+      const nextPosition = element.getBoundingClientRect();
+      const horizontalDistance = previousPosition.left - nextPosition.left;
+      const verticalDistance = previousPosition.top - nextPosition.top;
+      if (horizontalDistance === 0 && verticalDistance === 0) return;
+
+      element.getAnimations().forEach((animation) => animation.cancel());
+      element.animate(
+        [
+          {
+            transform: `translate(${horizontalDistance}px, ${verticalDistance}px)`,
+          },
+          { transform: 'translate(0, 0)' },
+        ],
+        {
+          duration: 220,
+          easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+        },
+      );
+    });
+  }
+
+  function movePhoto(sourceId: string, targetId: string) {
+    if (sourceId === targetId) return;
+    animatePhotoReorder((current) => {
+      const sourceIndex = current.findIndex((photo) => photo.id === sourceId);
+      const targetIndex = current.findIndex((photo) => photo.id === targetId);
+      if (sourceIndex < 0 || targetIndex < 0) return current;
+
+      const reordered = [...current];
+      const [movedPhoto] = reordered.splice(sourceIndex, 1);
+      if (!movedPhoto) return current;
+      reordered.splice(targetIndex, 0, movedPhoto);
+      return reordered;
+    }, sourceId);
+  }
+
+  function startPhotoDrag(
+    event: DragEvent<HTMLElement>,
+    photoIdToMove: string,
+  ) {
+    setDraggedPhotoId(photoIdToMove);
+    lastDragTargetId.current = null;
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', photoIdToMove);
+  }
+
+  function enterPhotoDropZone(
+    event: DragEvent<HTMLElement>,
+    targetPhotoId: string,
+  ) {
+    event.preventDefault();
+    const sourceId =
+      draggedPhotoId || event.dataTransfer.getData('text/plain');
+    if (!sourceId || lastDragTargetId.current === targetPhotoId) return;
+
+    lastDragTargetId.current = targetPhotoId;
+    movePhoto(sourceId, targetPhotoId);
+  }
+
+  function dropPhoto(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    lastDragTargetId.current = null;
+    setDraggedPhotoId(null);
   }
 
   function validate(): string | null {
@@ -131,7 +261,7 @@ export default function ProviderFleetAddPage() {
     if (new Date(form.expiryDate).getTime() <= Date.now()) {
       return 'The insurance policy must expire in the future.';
     }
-    if (!files.length) return 'Upload at least one clear vehicle photo.';
+    if (!photos.length) return 'Upload at least one clear vehicle photo.';
     return null;
   }
 
@@ -226,22 +356,49 @@ export default function ProviderFleetAddPage() {
 
         <section className="provider-fleet-add-card">
           <header><span>4</span><div><h2>Vehicle photos</h2><p>Upload 1–10 clear exterior and interior photos.</p></div></header>
-          <label className="provider-fleet-add-upload">
+          <label className={`provider-fleet-add-upload ${photos.length >= 10 ? 'disabled' : ''}`}>
             <CloudUploadOutlined />
             <strong>Choose vehicle photos</strong>
             <small>JPG, PNG, HEIC or WEBP · maximum 10 files</small>
-            <input type="file" accept="image/*" multiple onChange={(event) => addFiles(event.target.files)} />
+            <input type="file" accept="image/*" multiple disabled={photos.length >= 10 || submitMutation.isPending} onChange={(event) => { addFiles(event.target.files); event.target.value = ''; }} />
           </label>
-          {previews.length > 0 && (
+          {photos.length > 0 && (
             <div className="provider-fleet-add-previews">
-              {previews.map(({ file, url }, index) => (
-                <figure key={`${file.name}-${file.lastModified}-${index}`}>
-                  <img src={url} alt="Vehicle preview" />
+              {photos.map((photo, index) => (
+                <figure
+                  key={photo.id}
+                  ref={(element) => {
+                    if (element) photoElements.current.set(photo.id, element);
+                    else photoElements.current.delete(photo.id);
+                  }}
+                  className={draggedPhotoId === photo.id ? 'dragging' : ''}
+                  draggable={!submitMutation.isPending}
+                  onDragStart={(event) => startPhotoDrag(event, photo.id)}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'move';
+                  }}
+                  onDragEnter={(event) => enterPhotoDropZone(event, photo.id)}
+                  onDrop={dropPhoto}
+                  onDragEnd={() => {
+                    lastDragTargetId.current = null;
+                    setDraggedPhotoId(null);
+                  }}
+                >
+                  <img src={photo.url} alt={`Vehicle preview ${index + 1}`} />
+                  <span className="provider-fleet-add-drag-handle" aria-hidden="true" title="Drag to reorder">
+                    <DragIndicatorRounded />
+                  </span>
                   {index === 0 && <b>Cover</b>}
-                  <button type="button" aria-label="Remove photo" onClick={() => setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))}><CloseRounded /></button>
+                  <button type="button" aria-label={`Remove photo ${index + 1}`} disabled={submitMutation.isPending} onClick={() => removePhoto(photo.id)}><CloseRounded /></button>
                 </figure>
               ))}
             </div>
+          )}
+          {photos.length > 0 && (
+            <p className="provider-fleet-add-photo-note">
+              Drag photos to change their order. The first photo is the cover.
+            </p>
           )}
         </section>
 

@@ -22,8 +22,24 @@ const carVariantSchema = new mongoose.Schema(
     rentalPricePerDay: { type: Number, required: true, min: 0 },
     depositAmount: { type: Number, required: true, min: 0 },
     isAvailable: { type: Boolean, default: true },
-    isListed: { type: Boolean, default: true, index: true },
+    isListed: { type: Boolean, default: false, index: true },
     archivedAt: { type: Date, default: null },
+    approvalStatus: {
+      type: String,
+      enum: ["Pending", "Approved", "Rejected"],
+      // Legacy vehicles were already public before this workflow existed.
+      // New provider submissions explicitly set Pending in the controller.
+      default: "Approved",
+      index: true,
+    },
+    submittedAt: { type: Date, default: Date.now },
+    reviewedAt: { type: Date, default: null },
+    reviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    rejectionReason: { type: String, default: "", trim: true },
     insuranceDetails: {
       insuranceCompany: { type: String, trim: true },
       policyNumber: { type: String, trim: true },
@@ -42,8 +58,13 @@ const carVariantSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-carVariantSchema.index({ isListed: 1, isAvailable: 1, rentalPricePerDay: 1 });
-carVariantSchema.index({ provider: 1, isListed: 1, isAvailable: 1 });
+carVariantSchema.index({
+  approvalStatus: 1,
+  isListed: 1,
+  isAvailable: 1,
+  rentalPricePerDay: 1,
+});
+carVariantSchema.index({ provider: 1, approvalStatus: 1, archivedAt: 1 });
 carVariantSchema.index({ car: 1, isListed: 1, isAvailable: 1 });
 
 const CarVariant = mongoose.model("CarVariant", carVariantSchema);

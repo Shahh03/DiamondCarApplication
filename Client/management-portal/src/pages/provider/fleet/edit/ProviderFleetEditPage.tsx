@@ -480,6 +480,23 @@ export default function ProviderFleetEditPage() {
         </div>
       )}
 
+      {vehicle.approvalStatus && vehicle.approvalStatus !== 'Approved' && (
+        <div
+          className={`provider-fleet-edit-review ${vehicle.approvalStatus.toLowerCase()}`}
+        >
+          <strong>
+            {vehicle.approvalStatus === 'Pending'
+              ? 'Pending admin review'
+              : 'Changes required before approval'}
+          </strong>
+          <p>
+            {vehicle.approvalStatus === 'Rejected'
+              ? vehicle.rejectionReason || 'Save your corrections, then resubmit the vehicle from the Fleet page.'
+              : 'This vehicle is not visible to renters until an admin approves it.'}
+          </p>
+        </div>
+      )}
+
       <form
         id="provider-fleet-edit-form"
         className="provider-fleet-edit-layout"

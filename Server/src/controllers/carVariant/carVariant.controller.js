@@ -15,7 +15,15 @@ const SAFE_PROVIDER_FIELDS =
   "companyName address.city address.country profilePicture isVerified status currency";
 const PUBLIC_VARIANT_FIELDS =
   "provider car color rentalPricePerDay depositAmount isAvailable images";
-const LISTED = { isListed: { $ne: false } };
+const LISTED = {
+  isListed: true,
+  archivedAt: null,
+  $or: [
+    { approvalStatus: "Approved" },
+    { approvalStatus: { $exists: false } },
+  ],
+};
+const IN_PROVIDER_FLEET = { archivedAt: null };
 
 const populatePublicCarData = (query) =>
   query
@@ -34,6 +42,15 @@ const cleanOptionalText = (value) => {
   return text || undefined;
 };
 
+const queueForReview = (variant) => {
+  variant.approvalStatus = "Pending";
+  variant.isListed = false;
+  variant.submittedAt = new Date();
+  variant.reviewedAt = null;
+  variant.reviewedBy = null;
+  variant.rejectionReason = "";
+};
+
 export const createCarVariant = async (req, res) => {
   try {
     const {
@@ -48,6 +65,13 @@ export const createCarVariant = async (req, res) => {
 
     const dailyRate = validNonNegativeNumber(rentalPricePerDay);
     const deposit = validNonNegativeNumber(depositAmount);
+    const insuranceCompany = cleanOptionalText(
+      insuranceDetails?.insuranceCompany
+    );
+    const policyNumber = cleanOptionalText(insuranceDetails?.policyNumber);
+    const insuranceExpiry = insuranceDetails?.expiryDate
+      ? new Date(insuranceDetails.expiryDate)
+      : null;
 
     if (
       !provider ||
@@ -55,9 +79,18 @@ export const createCarVariant = async (req, res) => {
       !color?.toString().trim() ||
       !registrationNumber?.toString().trim() ||
       dailyRate == null ||
-      deposit == null
+      deposit == null ||
+      !insuranceCompany ||
+      !policyNumber ||
+      !insuranceExpiry ||
+      Number.isNaN(insuranceExpiry.getTime())
     ) {
       return res.status(400).json({ message: "All required fields must be filled" });
+    }
+    if (insuranceExpiry <= new Date()) {
+      return res.status(400).json({
+        message: "Insurance expiry date must be in the future",
+      });
     }
     if (!mongoose.isValidObjectId(provider) || !mongoose.isValidObjectId(car)) {
       return res.status(400).json({ message: "Invalid provider or car ID" });
@@ -85,12 +118,19 @@ export const createCarVariant = async (req, res) => {
       registrationNumber: normalizedRegistration,
       rentalPricePerDay: dailyRate,
       depositAmount: deposit,
-      insuranceDetails,
+      insuranceDetails: {
+        insuranceCompany,
+        policyNumber,
+        expiryDate: insuranceExpiry,
+      },
+      approvalStatus: "Pending",
+      submittedAt: new Date(),
+      isListed: false,
     });
 
     await variant.populate("car");
     return res.status(201).json({
-      message: "Car variant created successfully",
+      message: "Vehicle submitted for admin review",
       carVariant: variant,
     });
   } catch (error) {
@@ -113,7 +153,7 @@ export const getAllCarsForProvider = async (req, res) => {
       return res.status(400).json({ message: "Invalid provider ID" });
     }
 
-    const query = { provider: providerId, ...LISTED };
+    const query = { provider: providerId, ...IN_PROVIDER_FLEET };
     if (model) {
       const cars = await Car.find({
         model: { $regex: model, $options: "i" },
@@ -135,7 +175,7 @@ export const updateCarVariant = async (req, res) => {
   try {
     const variant = await CarVariant.findOne({
       _id: req.params.carVariantId,
-      ...LISTED,
+      ...IN_PROVIDER_FLEET,
     });
     if (!variant) {
       return res.status(404).json({ message: "Car variant not found" });
@@ -235,7 +275,10 @@ export const uploadCarVariantImages = async (req, res) => {
       return res.status(400).json({ message: "No images uploaded" });
     }
 
-    const variant = await CarVariant.findOne({ _id: carVariantId, ...LISTED });
+    const variant = await CarVariant.findOne({
+      _id: carVariantId,
+      ...IN_PROVIDER_FLEET,
+    });
     if (!variant) return res.status(404).json({ message: "Car variant not found" });
 
     const oldImages = variant.images ?? [];
@@ -269,6 +312,7 @@ export const uploadCarVariantImages = async (req, res) => {
       imagePublicIds: variant.imagePublicIds,
       imageCount: variant.images.length,
       remainingSlots: 10 - variant.images.length,
+      approvalStatus: variant.approvalStatus,
     });
   } catch (error) {
     console.error("Upload car variant images error:", error);
@@ -293,7 +337,7 @@ export const removeCarVariantImage = async (req, res) => {
 
     const variant = await CarVariant.findOne({
       _id: req.params.carVariantId,
-      ...LISTED,
+      ...IN_PROVIDER_FLEET,
     });
     if (!variant) return res.status(404).json({ message: "Car variant not found" });
 
@@ -324,6 +368,7 @@ export const removeCarVariantImage = async (req, res) => {
       message: "Image removed successfully",
       images: variant.images,
       imagePublicIds: variant.imagePublicIds,
+      approvalStatus: variant.approvalStatus,
     });
   } catch (error) {
     console.error("Remove car variant image error:", error);
@@ -344,7 +389,7 @@ export const reorderCarVariantImages = async (req, res) => {
 
     const variant = await CarVariant.findOne({
       _id: carVariantId,
-      ...LISTED,
+      ...IN_PROVIDER_FLEET,
     });
     if (!variant) {
       return res.status(404).json({ message: "Car variant not found" });
@@ -410,7 +455,7 @@ export const archiveCarVariant = async (req, res) => {
   try {
     const variant = await CarVariant.findOne({
       _id: req.params.carVariantId,
-      ...LISTED,
+      ...IN_PROVIDER_FLEET,
     });
     if (!variant) return res.status(404).json({ message: "Car variant not found" });
 
@@ -436,6 +481,138 @@ export const archiveCarVariant = async (req, res) => {
   } catch (error) {
     console.error("Archive car variant error:", error);
     return res.status(500).json({ message: "Could not remove vehicle" });
+  }
+};
+
+export const submitCarVariantForReview = async (req, res) => {
+  try {
+    const variant = await CarVariant.findOne({
+      _id: req.params.carVariantId,
+      ...IN_PROVIDER_FLEET,
+    });
+    if (!variant) {
+      return res.status(404).json({ message: "Car variant not found" });
+    }
+    if (variant.approvalStatus === "Approved") {
+      return res.status(409).json({ message: "This vehicle is already approved" });
+    }
+    if (!variant.images?.length) {
+      return res.status(400).json({
+        message: "Upload at least one vehicle photo before submitting",
+      });
+    }
+
+    queueForReview(variant);
+    await variant.save();
+    await variant.populate("car");
+
+    return res.status(200).json({
+      message: "Vehicle submitted for admin review",
+      carVariant: variant,
+    });
+  } catch (error) {
+    console.error("Submit vehicle review error:", error);
+    return res.status(500).json({ message: "Could not submit vehicle for review" });
+  }
+};
+
+export const getVehicleReviews = async (req, res) => {
+  try {
+    const requestedStatus = req.query.status?.toString() || "Pending";
+    const statuses = new Set(["Pending", "Approved", "Rejected"]);
+    if (!statuses.has(requestedStatus)) {
+      return res.status(400).json({ message: "Invalid review status" });
+    }
+
+    const variants = await CarVariant.find({
+      approvalStatus: requestedStatus,
+      ...IN_PROVIDER_FLEET,
+    })
+      .populate("car")
+      .populate(
+        "provider",
+        "companyName contactPerson address profilePicture isVerified status email"
+      )
+      .populate("reviewedBy", "username email")
+      .sort(
+        requestedStatus === "Pending"
+          ? { submittedAt: 1, createdAt: 1 }
+          : { reviewedAt: -1 }
+      )
+      .lean();
+
+    return res.status(200).json(variants);
+  } catch (error) {
+    console.error("Get vehicle reviews error:", error);
+    return res.status(500).json({ message: "Could not load vehicle reviews" });
+  }
+};
+
+export const reviewCarVariant = async (req, res) => {
+  try {
+    const { decision, rejectionReason } = req.body;
+    if (!new Set(["Approved", "Rejected"]).has(decision)) {
+      return res.status(400).json({
+        message: "Decision must be Approved or Rejected",
+      });
+    }
+
+    const reason = rejectionReason?.toString().trim() || "";
+    if (decision === "Rejected" && reason.length < 5) {
+      return res.status(400).json({
+        message: "Provide a clear rejection reason",
+      });
+    }
+
+    const variant = await CarVariant.findOne({
+      _id: req.params.carVariantId,
+      approvalStatus: "Pending",
+      ...IN_PROVIDER_FLEET,
+    });
+    if (!variant) {
+      const existing = await CarVariant.findById(req.params.carVariantId).select(
+        "approvalStatus archivedAt"
+      );
+      if (!existing || existing.archivedAt) {
+        return res.status(404).json({ message: "Vehicle not found" });
+      }
+      return res.status(409).json({
+        message: `This vehicle is already ${(existing.approvalStatus || "approved").toLowerCase()}`,
+      });
+    }
+
+    if (decision === "Approved") {
+      if (!variant.images?.length) {
+        return res.status(409).json({
+          message: "This vehicle needs at least one photo before approval",
+        });
+      }
+      const expiry = variant.insuranceDetails?.expiryDate;
+      if (!expiry || new Date(expiry) <= new Date()) {
+        return res.status(409).json({
+          message: "This vehicle needs an active insurance policy before approval",
+        });
+      }
+    }
+
+    variant.approvalStatus = decision;
+    variant.isListed = decision === "Approved";
+    variant.reviewedAt = new Date();
+    variant.reviewedBy = req.auth.userId;
+    variant.rejectionReason = decision === "Rejected" ? reason : "";
+    await variant.save();
+    await variant.populate(["car", "provider", "reviewedBy"]);
+
+    return res.status(200).json({
+      message:
+        decision === "Approved"
+          ? "Vehicle approved and listed for renters"
+          : "Vehicle rejected and returned to the provider",
+      carVariant: variant,
+    });
+  } catch (error) {
+    console.error("Review vehicle error:", error);
+    return res.status(500).json({ message: "Could not review vehicle" });
   }
 };
 

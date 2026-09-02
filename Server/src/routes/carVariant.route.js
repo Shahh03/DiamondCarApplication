@@ -8,8 +8,11 @@ import {
   getCarVariantByID,
   getCarVariantsByCarId,
   getRecommendedCarVariants,
+  getVehicleReviews,
   removeCarVariantImage,
   reorderCarVariantImages,
+  reviewCarVariant,
+  submitCarVariantForReview,
   updateCarVariant,
   uploadCarVariantImages,
 } from "../controllers/carVariant/carVariant.controller.js";
@@ -19,6 +22,7 @@ import {
   requireBodyOwner,
   requireCarVariantProvider,
   requireParamOwner,
+  requireRole,
 } from "../middlewares/authorization.js";
 import { carUpload } from "../middlewares/upload.js";
 
@@ -92,6 +96,28 @@ router.delete(
   requireCarVariantProvider,
   requireAcceptedProvider,
   archiveCarVariant
+);
+
+router.put(
+  "/carVariant/:carVariantId/submit-review",
+  authenticateAccessToken,
+  requireCarVariantProvider,
+  requireAcceptedProvider,
+  submitCarVariantForReview
+);
+
+router.get(
+  "/admin/carVariant/reviews",
+  authenticateAccessToken,
+  requireRole("Admin"),
+  getVehicleReviews
+);
+
+router.put(
+  "/admin/carVariant/:carVariantId/review",
+  authenticateAccessToken,
+  requireRole("Admin"),
+  reviewCarVariant
 );
 
 // Keep the dynamic public route last.

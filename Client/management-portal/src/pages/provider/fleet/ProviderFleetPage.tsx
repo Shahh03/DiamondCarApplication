@@ -441,7 +441,8 @@ export default function ProviderFleetPage() {
                     <th>Registration</th>
                     <th>Color</th>
                     <th>Price / Day</th>
-                    <th>Status</th>
+                    <th>Approval</th>
+                    <th>Availability</th>
                     <th>Photos</th>
                     <th>Actions</th>
                   </tr>
@@ -470,10 +471,10 @@ export default function ProviderFleetPage() {
                           {formatMoney(vehicle.rentalPricePerDay, currency)}
                         </td>
                         <td>
-                          <div className="provider-fleet-status-stack">
-                            <ApprovalBadge status={vehicle.approvalStatus} />
-                            <AvailabilityBadge availability={currentAvailability} />
-                          </div>
+                          <ApprovalBadge status={vehicle.approvalStatus} />
+                        </td>
+                        <td>
+                          <AvailabilityBadge availability={currentAvailability} />
                         </td>
                         <td>
                           <span className="provider-fleet-photo-count">
