@@ -1,3 +1,4 @@
+
 import {
   AddRounded,
   BlockOutlined,
@@ -26,7 +27,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   getProviderFleet,
   submitProviderFleetVehicleForReview,
-  type FleetAvailability,
+  type FleetCurrentStatus,
+  type FleetListingStatus,
   type ProviderFleetBooking,
   type ProviderFleetVehicle,
   type VehicleApprovalStatus,
@@ -37,33 +39,65 @@ import './ProviderFleetPage.css';
 
 const PAGE_SIZE = 5;
 
-type AvailabilityFilter = 'all' | FleetAvailability;
+type CurrentStatusFilter = 'all' | FleetCurrentStatus;
+type ListingFilter = 'all' | FleetListingStatus;
 
 function bookingVehicleId(booking: ProviderFleetBooking): string | undefined {
   if (typeof booking.carVariant === 'string') return booking.carVariant;
   return booking.carVariant?._id;
 }
 
-function activeRentalVehicleIds(bookings: ProviderFleetBooking[]): Set<string> {
-  return new Set(
-    bookings
-      .filter((booking) => booking.status === 'InProgress')
-      .map(bookingVehicleId)
-      .filter((id): id is string => Boolean(id)),
-  );
+function utcDay(value: string | Date): number | null {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
 }
 
-function vehicleAvailability(
+function currentStatusesByVehicle(
+  bookings: ProviderFleetBooking[],
+): Map<string, FleetCurrentStatus> {
+  const statuses = new Map<string, FleetCurrentStatus>();
+  const today = utcDay(new Date());
+
+  for (const booking of bookings) {
+    const vehicleId = bookingVehicleId(booking);
+    if (!vehicleId) continue;
+
+    if (booking.status === 'InProgress') {
+      statuses.set(vehicleId, 'on-rent');
+      continue;
+    }
+
+    if (booking.status !== 'Confirmed' || statuses.get(vehicleId) === 'on-rent') {
+      continue;
+    }
+
+    const start = booking.startDate ? utcDay(booking.startDate) : null;
+    const end = booking.endDate ? utcDay(booking.endDate) : null;
+    if (today != null && start != null && end != null && start <= today && today <= end) {
+      statuses.set(vehicleId, 'unavailable');
+    }
+  }
+
+  return statuses;
+}
+
+function vehicleCurrentStatus(
   vehicle: ProviderFleetVehicle,
-  onRentIds: Set<string>,
-): FleetAvailability {
-  if (onRentIds.has(vehicle._id)) return 'on-rent';
-  return vehicle.isAvailable === false ? 'unavailable' : 'available';
+  statuses: Map<string, FleetCurrentStatus>,
+): FleetCurrentStatus {
+  return statuses.get(vehicle._id) ?? 'available';
 }
 
-function availabilityLabel(availability: FleetAvailability): string {
-  if (availability === 'on-rent') return 'On Rent';
-  if (availability === 'unavailable') return 'Unavailable';
+function vehicleListingStatus(
+  vehicle: ProviderFleetVehicle,
+): FleetListingStatus {
+  return vehicle.isAvailable !== false ? 'listed' : 'unlisted';
+}
+
+function currentStatusLabel(status: FleetCurrentStatus): string {
+  if (status === 'on-rent') return 'On Rent';
+  if (status === 'unavailable') return 'Unavailable';
   return 'Available';
 }
 
@@ -117,8 +151,9 @@ export default function ProviderFleetPage() {
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
-  const [availability, setAvailability] =
-    useState<AvailabilityFilter>('all');
+  const [listing, setListing] = useState<ListingFilter>('all');
+  const [currentStatus, setCurrentStatus] =
+    useState<CurrentStatusFilter>('all');
   const [brand, setBrand] = useState('all');
   const [category, setCategory] = useState('all');
   const [year, setYear] = useState('all');
@@ -166,12 +201,12 @@ export default function ProviderFleetPage() {
   }, [selectedVehicle]);
 
   const vehicles = fleetQuery.data?.vehicles ?? [];
-  const onRentIds = useMemo(
-    () => activeRentalVehicleIds(fleetQuery.data?.bookings ?? []),
+  const currentStatusByVehicle = useMemo(
+    () => currentStatusesByVehicle(fleetQuery.data?.bookings ?? []),
     [fleetQuery.data?.bookings],
   );
 
-  const counts = useMemo(() => {
+  const currentStatusCounts = useMemo(() => {
     const result = {
       all: vehicles.length,
       available: 0,
@@ -180,11 +215,21 @@ export default function ProviderFleetPage() {
     };
 
     for (const vehicle of vehicles) {
-      result[vehicleAvailability(vehicle, onRentIds)] += 1;
+      result[vehicleCurrentStatus(vehicle, currentStatusByVehicle)] += 1;
     }
 
     return result;
-  }, [onRentIds, vehicles]);
+  }, [currentStatusByVehicle, vehicles]);
+
+  const listingCounts = useMemo(() => {
+    const result = { all: vehicles.length, listed: 0, unlisted: 0 };
+
+    for (const vehicle of vehicles) {
+      result[vehicleListingStatus(vehicle)] += 1;
+    }
+
+    return result;
+  }, [vehicles]);
 
   const brands = useMemo(
     () => uniqueSorted(vehicles.map((vehicle) => vehicle.car?.brand)),
@@ -206,7 +251,8 @@ export default function ProviderFleetPage() {
     const query = search.trim().toLowerCase();
 
     return vehicles.filter((vehicle) => {
-      const currentAvailability = vehicleAvailability(vehicle, onRentIds);
+      const vehicleStatus = vehicleCurrentStatus(vehicle, currentStatusByVehicle);
+      const vehicleListing = vehicleListingStatus(vehicle);
       const searchable = [
         vehicle.car?.brand,
         vehicle.car?.model,
@@ -221,13 +267,14 @@ export default function ProviderFleetPage() {
 
       return (
         (!query || searchable.includes(query)) &&
-        (availability === 'all' || availability === currentAvailability) &&
+        (listing === 'all' || listing === vehicleListing) &&
+        (currentStatus === 'all' || currentStatus === vehicleStatus) &&
         (brand === 'all' || vehicle.car?.brand === brand) &&
         (category === 'all' || vehicle.car?.category === category) &&
         (year === 'all' || String(vehicle.car?.year) === year)
       );
     });
-  }, [availability, category, brand, onRentIds, search, vehicles, year]);
+  }, [brand, category, currentStatus, currentStatusByVehicle, listing, search, vehicles, year]);
 
   const pageCount = Math.max(1, Math.ceil(filteredVehicles.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
@@ -238,7 +285,8 @@ export default function ProviderFleetPage() {
 
   const hasFilters =
     Boolean(search.trim()) ||
-    availability !== 'all' ||
+    listing !== 'all' ||
+    currentStatus !== 'all' ||
     brand !== 'all' ||
     category !== 'all' ||
     year !== 'all';
@@ -255,7 +303,8 @@ export default function ProviderFleetPage() {
 
   function clearFilters() {
     setSearch('');
-    setAvailability('all');
+    setListing('all');
+    setCurrentStatus('all');
     setBrand('all');
     setCategory('all');
     setYear('all');
@@ -263,8 +312,13 @@ export default function ProviderFleetPage() {
     setSearchParams({}, { replace: true });
   }
 
-  function changeAvailability(next: AvailabilityFilter) {
-    setAvailability(next);
+  function changeCurrentStatus(next: CurrentStatusFilter) {
+    setCurrentStatus(next);
+    setPage(1);
+  }
+
+  function changeListing(next: ListingFilter) {
+    setListing(next);
     setPage(1);
   }
 
@@ -292,7 +346,7 @@ export default function ProviderFleetPage() {
       <section className="provider-fleet-heading">
         <div>
           <h1>Fleet Management</h1>
-          <p>Manage your vehicles, availability and pricing.</p>
+          <p>Manage vehicle listings, current status and pricing.</p>
         </div>
 
         <Link
@@ -309,35 +363,35 @@ export default function ProviderFleetPage() {
       <section className="provider-fleet-kpis" aria-label="Fleet summary">
         <FleetKpi
           label="Total Vehicles"
-          value={counts.all}
+          value={currentStatusCounts.all}
           icon={<DirectionsCarOutlined />}
           tone="blue"
-          active={availability === 'all'}
-          onClick={() => changeAvailability('all')}
+          active={currentStatus === 'all'}
+          onClick={() => changeCurrentStatus('all')}
         />
         <FleetKpi
           label="Available"
-          value={counts.available}
+          value={currentStatusCounts.available}
           icon={<CheckCircleOutlineRounded />}
           tone="teal"
-          active={availability === 'available'}
-          onClick={() => changeAvailability('available')}
+          active={currentStatus === 'available'}
+          onClick={() => changeCurrentStatus('available')}
         />
         <FleetKpi
           label="On Rent"
-          value={counts['on-rent']}
+          value={currentStatusCounts['on-rent']}
           icon={<KeyRounded />}
           tone="orange"
-          active={availability === 'on-rent'}
-          onClick={() => changeAvailability('on-rent')}
+          active={currentStatus === 'on-rent'}
+          onClick={() => changeCurrentStatus('on-rent')}
         />
         <FleetKpi
           label="Unavailable"
-          value={counts.unavailable}
+          value={currentStatusCounts.unavailable}
           icon={<BlockOutlined />}
           tone="red"
-          active={availability === 'unavailable'}
-          onClick={() => changeAvailability('unavailable')}
+          active={currentStatus === 'unavailable'}
+          onClick={() => changeCurrentStatus('unavailable')}
         />
       </section>
 
@@ -354,6 +408,14 @@ export default function ProviderFleetPage() {
           </label>
 
           <div className="provider-fleet-selects">
+            <FilterSelect
+              label="Current status"
+              value={currentStatus}
+              options={['available', 'on-rent', 'unavailable']}
+              allLabel="All Statuses"
+              optionLabel={(option) => currentStatusLabel(option as FleetCurrentStatus)}
+              onChange={(value) => changeCurrentStatus(value as CurrentStatusFilter)}
+            />
             <FilterSelect
               label="Brand"
               value={brand}
@@ -387,23 +449,22 @@ export default function ProviderFleetPage() {
           </div>
         </div>
 
-        <div className="provider-fleet-tabs" role="group" aria-label="Availability">
+        <div className="provider-fleet-tabs" role="group" aria-label="Listing status">
           {(
             [
               ['all', 'All'],
-              ['available', 'Available'],
-              ['on-rent', 'On Rent'],
-              ['unavailable', 'Unavailable'],
+              ['listed', 'Listed'],
+              ['unlisted', 'Unlisted'],
             ] as const
           ).map(([value, label]) => (
             <button
               key={value}
               type="button"
-              className={availability === value ? 'active' : ''}
-              onClick={() => changeAvailability(value)}
+              className={listing === value ? 'active' : ''}
+              onClick={() => changeListing(value)}
             >
               {label}
-              <span>{counts[value]}</span>
+              <span>{listingCounts[value]}</span>
             </button>
           ))}
 
@@ -442,17 +503,19 @@ export default function ProviderFleetPage() {
                     <th>Color</th>
                     <th>Price / Day</th>
                     <th>Approval</th>
-                    <th>Availability</th>
+                    <th>Listing</th>
+                    <th>Current Status</th>
                     <th>Photos</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pageVehicles.map((vehicle) => {
-                    const currentAvailability = vehicleAvailability(
+                    const vehicleStatus = vehicleCurrentStatus(
                       vehicle,
-                      onRentIds,
+                      currentStatusByVehicle,
                     );
+                    const vehicleListing = vehicleListingStatus(vehicle);
 
                     return (
                       <tr key={vehicle._id}>
@@ -474,7 +537,10 @@ export default function ProviderFleetPage() {
                           <ApprovalBadge status={vehicle.approvalStatus} />
                         </td>
                         <td>
-                          <AvailabilityBadge availability={currentAvailability} />
+                          <ListingBadge listing={vehicleListing} />
+                        </td>
+                        <td>
+                          <CurrentStatusBadge status={vehicleStatus} />
                         </td>
                         <td>
                           <span className="provider-fleet-photo-count">
@@ -520,7 +586,11 @@ export default function ProviderFleetPage() {
 
             <div className="provider-fleet-mobile-list">
               {pageVehicles.map((vehicle) => {
-                const currentAvailability = vehicleAvailability(vehicle, onRentIds);
+                const vehicleStatus = vehicleCurrentStatus(
+                  vehicle,
+                  currentStatusByVehicle,
+                );
+                const vehicleListing = vehicleListingStatus(vehicle);
 
                 return (
                   <article
@@ -536,7 +606,8 @@ export default function ProviderFleetPage() {
                       </small>
                       <span className="provider-fleet-mobile-statuses">
                         <ApprovalBadge status={vehicle.approvalStatus} />
-                        <AvailabilityBadge availability={currentAvailability} />
+                        <ListingBadge listing={vehicleListing} />
+                        <CurrentStatusBadge status={vehicleStatus} />
                       </span>
                       <b>{formatMoney(vehicle.rentalPricePerDay, currency)} / day</b>
                     </span>
@@ -599,7 +670,11 @@ export default function ProviderFleetPage() {
       {selectedVehicle && (
         <VehicleDrawer
           vehicle={selectedVehicle}
-          availability={vehicleAvailability(selectedVehicle, onRentIds)}
+          listing={vehicleListingStatus(selectedVehicle)}
+          currentStatus={vehicleCurrentStatus(
+            selectedVehicle,
+            currentStatusByVehicle,
+          )}
           currency={currency}
           onClose={() => setSelectedVehicle(null)}
         />
@@ -643,12 +718,14 @@ function FilterSelect({
   value,
   options,
   allLabel,
+  optionLabel = (option) => option,
   onChange,
 }: {
   label: string;
   value: string;
   options: string[];
   allLabel: string;
+  optionLabel?: (option: string) => string;
   onChange: (value: string) => void;
 }) {
   return (
@@ -657,7 +734,7 @@ function FilterSelect({
       <select value={value} onChange={(event) => onChange(event.target.value)}>
         <option value="all">{allLabel}</option>
         {options.map((option) => (
-          <option key={option} value={option}>{option}</option>
+          <option key={option} value={option}>{optionLabel(option)}</option>
         ))}
       </select>
     </label>
@@ -706,14 +783,26 @@ function ColorLabel({ color }: { color?: string }) {
   );
 }
 
-function AvailabilityBadge({
-  availability,
+function CurrentStatusBadge({
+  status,
 }: {
-  availability: FleetAvailability;
+  status: FleetCurrentStatus;
 }) {
   return (
-    <span className={`provider-fleet-badge ${availability}`}>
-      {availabilityLabel(availability)}
+    <span className={`provider-fleet-badge ${status}`}>
+      {currentStatusLabel(status)}
+    </span>
+  );
+}
+
+function ListingBadge({
+  listing,
+}: {
+  listing: FleetListingStatus;
+}) {
+  return (
+    <span className={`provider-fleet-listing ${listing}`}>
+      {listing === 'listed' ? 'Listed' : 'Unlisted'}
     </span>
   );
 }
@@ -774,12 +863,14 @@ function FleetLoadingState() {
 
 function VehicleDrawer({
   vehicle,
-  availability,
+  listing,
+  currentStatus,
   currency,
   onClose,
 }: {
   vehicle: ProviderFleetVehicle;
-  availability: FleetAvailability;
+  listing: FleetListingStatus;
+  currentStatus: FleetCurrentStatus;
   currency: string;
   onClose: () => void;
 }) {
@@ -865,7 +956,7 @@ function VehicleDrawer({
             <DirectionsCarOutlined />
           )}
 
-          <AvailabilityBadge availability={availability} />
+          <CurrentStatusBadge status={currentStatus} />
 
           {hasMultipleImages && (
             <>
@@ -930,12 +1021,15 @@ function VehicleDrawer({
         <DrawerSection title="Listing review">
           <div className="provider-fleet-review-details">
             <ApprovalBadge status={vehicle.approvalStatus} />
+            <ListingBadge listing={listing} />
             <p>
               {vehicle.approvalStatus === 'Pending'
                 ? 'This vehicle is waiting for admin approval and is not visible to renters.'
                 : vehicle.approvalStatus === 'Rejected'
                   ? vehicle.rejectionReason || 'The admin requested changes before approval.'
-                  : 'This vehicle is approved for renter listings.'}
+                  : listing === 'listed'
+                    ? 'This vehicle is approved and visible to renters.'
+                    : 'This vehicle is approved but the provider has unlisted it.'}
             </p>
           </div>
         </DrawerSection>

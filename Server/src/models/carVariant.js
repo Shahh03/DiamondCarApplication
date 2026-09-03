@@ -1,3 +1,4 @@
+
 import mongoose from "mongoose";
 
 const carVariantSchema = new mongoose.Schema(
@@ -22,7 +23,6 @@ const carVariantSchema = new mongoose.Schema(
     rentalPricePerDay: { type: Number, required: true, min: 0 },
     depositAmount: { type: Number, required: true, min: 0 },
     isAvailable: { type: Boolean, default: true },
-    isListed: { type: Boolean, default: false, index: true },
     archivedAt: { type: Date, default: null },
     approvalStatus: {
       type: String,
@@ -60,12 +60,11 @@ const carVariantSchema = new mongoose.Schema(
 
 carVariantSchema.index({
   approvalStatus: 1,
-  isListed: 1,
   isAvailable: 1,
   rentalPricePerDay: 1,
 });
 carVariantSchema.index({ provider: 1, approvalStatus: 1, archivedAt: 1 });
-carVariantSchema.index({ car: 1, isListed: 1, isAvailable: 1 });
+carVariantSchema.index({ car: 1, approvalStatus: 1, isAvailable: 1 });
 
 const CarVariant = mongoose.model("CarVariant", carVariantSchema);
 

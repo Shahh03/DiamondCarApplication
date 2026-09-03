@@ -1,3 +1,4 @@
+
 import mongoose from "mongoose";
 
 import Booking from "../models/booking.js";
@@ -241,7 +242,14 @@ export const getRecommendationsForRenter = async (renterId, limit = 8) => {
         populate: { path: "car" },
       })
       .lean(),
-    CarVariant.find({ isAvailable: true })
+    CarVariant.find({
+      isAvailable: true,
+      archivedAt: null,
+      $or: [
+        { approvalStatus: "Approved" },
+        { approvalStatus: { $exists: false } },
+      ],
+    })
       .populate("car")
       .populate("provider", SAFE_PROVIDER_FIELDS)
       .lean(),

@@ -1,3 +1,4 @@
+
 .provider-fleet-page {
   position: relative;
   width: min(1480px, 100%);
@@ -207,7 +208,7 @@
 
 .provider-fleet-selects {
   display: grid;
-  grid-template-columns: repeat(3, minmax(130px, 1fr));
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
   gap: 10px;
 }
 
@@ -298,7 +299,7 @@
 
 .provider-fleet-table {
   width: 100%;
-  min-width: 1030px;
+  min-width: 1140px;
   border-collapse: collapse;
 }
 
@@ -438,6 +439,27 @@
 .provider-fleet-badge.unavailable {
   color: #dc2626;
   background: #fee2e2;
+}
+
+.provider-fleet-listing {
+  width: max-content;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 9px;
+  border-radius: 6px;
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.provider-fleet-listing.listed {
+  color: #047857;
+  background: #d1fae5;
+}
+
+.provider-fleet-listing.unlisted {
+  color: #475569;
+  background: #e2e8f0;
 }
 
 .provider-fleet-status-stack,
@@ -1045,7 +1067,7 @@
   }
 
   .provider-fleet-selects {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .provider-fleet-tabs {
@@ -1223,3 +1245,4 @@
     grid-template-columns: 1fr;
   }
 }
+

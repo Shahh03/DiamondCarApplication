@@ -53,6 +53,11 @@ const bookingConflictQuery = (carVariant, startDate, endDate) => ({
   endDate: { $gte: startDate },
 });
 
+const isPubliclyListed = (variant) =>
+  variant.isAvailable === true &&
+  (variant.approvalStatus ?? "Approved") === "Approved" &&
+  !variant.archivedAt;
+
 const findRenter = async (renterId) => {
   if (!mongoose.isValidObjectId(renterId)) {
     const error = new Error("Invalid renter ID");
@@ -163,9 +168,9 @@ export const createStripePaymentIntent = async (req, res) => {
       return res.status(400).json({ message: "Car provider is missing" });
     }
 
-    if (!variant.isAvailable) {
+    if (!isPubliclyListed(variant)) {
       return res.status(409).json({
-        message: "Car is currently unavailable",
+        message: "This vehicle is not currently listed for renters",
       });
     }
 
@@ -437,13 +442,15 @@ export const stripeWebhook = async (req, res) => {
 
     const [renterExists, variant] = await Promise.all([
       Renter.exists({ _id: renterId }),
-      CarVariant.findById(carVariantId).select("isAvailable provider"),
+      CarVariant.findById(carVariantId).select(
+        "isAvailable approvalStatus archivedAt provider"
+      ),
     ]);
 
     if (
       !renterExists ||
       !variant ||
-      !variant.isAvailable ||
+      !isPubliclyListed(variant) ||
       variant.provider.toString() !== providerId
     ) {
       await refundUnavailablePayment(stripe, stripeObject);
@@ -458,11 +465,25 @@ export const stripeWebhook = async (req, res) => {
       await session.withTransaction(async () => {
         // Updating the variant serializes simultaneous successful checkouts for
         // the same physical car. A retried transaction checks conflicts again.
-        await CarVariant.updateOne(
-          { _id: carVariantId, isAvailable: true },
+        const variantLock = await CarVariant.updateOne(
+          {
+            _id: carVariantId,
+            isAvailable: true,
+            archivedAt: null,
+            $or: [
+              { approvalStatus: "Approved" },
+              { approvalStatus: { $exists: false } },
+            ],
+          },
           { $set: { updatedAt: new Date() } },
           { session }
         );
+
+        if (variantLock.matchedCount !== 1) {
+          const error = new Error("Vehicle is no longer listed");
+          error.code = "VEHICLE_NOT_LISTED";
+          throw error;
+        }
 
         const duplicatePayment = await Payment.findOne({
           stripePaymentIntentId: stripeObject.id,
@@ -521,7 +542,12 @@ export const stripeWebhook = async (req, res) => {
         bookingCreated = true;
       });
     } catch (error) {
-      if (error.code !== "BOOKING_CONFLICT") throw error;
+      if (
+        error.code !== "BOOKING_CONFLICT" &&
+        error.code !== "VEHICLE_NOT_LISTED"
+      ) {
+        throw error;
+      }
     } finally {
       await session.endSession();
     }

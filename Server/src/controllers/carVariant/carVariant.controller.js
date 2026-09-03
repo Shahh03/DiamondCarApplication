@@ -1,3 +1,4 @@
+
 import mongoose from "mongoose";
 
 import cloudinary from "../../config/cloudinary.js";
@@ -15,8 +16,8 @@ const SAFE_PROVIDER_FIELDS =
   "companyName address.city address.country profilePicture isVerified status currency";
 const PUBLIC_VARIANT_FIELDS =
   "provider car color rentalPricePerDay depositAmount isAvailable images";
-const LISTED = {
-  isListed: true,
+const PUBLICLY_LISTED = {
+  isAvailable: true,
   archivedAt: null,
   $or: [
     { approvalStatus: "Approved" },
@@ -44,7 +45,6 @@ const cleanOptionalText = (value) => {
 
 const queueForReview = (variant) => {
   variant.approvalStatus = "Pending";
-  variant.isListed = false;
   variant.submittedAt = new Date();
   variant.reviewedAt = null;
   variant.reviewedBy = null;
@@ -125,7 +125,6 @@ export const createCarVariant = async (req, res) => {
       },
       approvalStatus: "Pending",
       submittedAt: new Date(),
-      isListed: false,
     });
 
     await variant.populate("car");
@@ -473,7 +472,6 @@ export const archiveCarVariant = async (req, res) => {
     }
 
     variant.isAvailable = false;
-    variant.isListed = false;
     variant.archivedAt = new Date();
     await variant.save();
 
@@ -596,7 +594,6 @@ export const reviewCarVariant = async (req, res) => {
     }
 
     variant.approvalStatus = decision;
-    variant.isListed = decision === "Approved";
     variant.reviewedAt = new Date();
     variant.reviewedBy = req.auth.userId;
     variant.rejectionReason = decision === "Rejected" ? reason : "";
@@ -606,7 +603,7 @@ export const reviewCarVariant = async (req, res) => {
     return res.status(200).json({
       message:
         decision === "Approved"
-          ? "Vehicle approved and listed for renters"
+          ? "Vehicle approved successfully"
           : "Vehicle rejected and returned to the provider",
       carVariant: variant,
     });
@@ -626,7 +623,7 @@ export const getCarVariantsByCarId = async (req, res) => {
       return res.status(404).json({ message: "Car model not found" });
     }
     const variants = await populatePublicCarData(
-      CarVariant.find({ car: carId, isAvailable: true, ...LISTED })
+      CarVariant.find({ car: carId, ...PUBLICLY_LISTED })
     );
     return res.status(200).json(variants);
   } catch {
@@ -637,7 +634,7 @@ export const getCarVariantsByCarId = async (req, res) => {
 export const getAllAvaiableCarVariants = async (_req, res) => {
   try {
     const variants = await populatePublicCarData(
-      CarVariant.find({ isAvailable: true, ...LISTED })
+      CarVariant.find(PUBLICLY_LISTED)
     );
     return res.status(200).json(variants);
   } catch {
@@ -671,7 +668,7 @@ export const getCarVariantByID = async (req, res) => {
       return res.status(400).json({ message: "Invalid car variant ID" });
     }
     const variant = await populatePublicCarData(
-      CarVariant.findOne({ _id: carVariantId, ...LISTED })
+      CarVariant.findOne({ _id: carVariantId, ...PUBLICLY_LISTED })
     );
     if (!variant) return res.status(404).json({ message: "Car variant not found" });
     return res.status(200).json(variant);

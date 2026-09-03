@@ -1,6 +1,8 @@
+
 import { apiClient, apiErrorMessage } from '../../core/apiClient';
 
-export type FleetAvailability = 'available' | 'on-rent' | 'unavailable';
+export type FleetCurrentStatus = 'available' | 'on-rent' | 'unavailable';
+export type FleetListingStatus = 'listed' | 'unlisted';
 export type VehicleApprovalStatus = 'Pending' | 'Approved' | 'Rejected';
 
 export interface ProviderFleetCar {
@@ -24,7 +26,6 @@ export interface ProviderFleetVehicle {
   rentalPricePerDay?: number;
   depositAmount?: number;
   isAvailable?: boolean;
-  isListed?: boolean;
   approvalStatus?: VehicleApprovalStatus;
   submittedAt?: string;
   reviewedAt?: string;

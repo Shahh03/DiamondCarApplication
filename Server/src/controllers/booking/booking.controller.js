@@ -1,3 +1,4 @@
+
 import mongoose from "mongoose";
 import Stripe from "stripe";
 
@@ -91,14 +92,20 @@ export const checkBookingAvailability = async (req, res) => {
       return res.status(400).json({ available: false, message: dates.error });
     }
 
-    const variant = await CarVariant.findById(carVariantId).select("isAvailable");
+    const variant = await CarVariant.findById(carVariantId).select(
+      "isAvailable approvalStatus archivedAt"
+    );
     if (!variant) {
       return res.status(404).json({ available: false, message: "Car variant not found" });
     }
-    if (!variant.isAvailable) {
+    if (
+      !variant.isAvailable ||
+      variant.approvalStatus !== "Approved" ||
+      variant.archivedAt
+    ) {
       return res.status(200).json({
         available: false,
-        message: "This car is currently unavailable",
+        message: "This vehicle is not currently listed for renters",
       });
     }
 
@@ -367,3 +374,4 @@ export const getbookingbyId = async (req, res) => {
     });
   }
 };
+

@@ -1,3 +1,4 @@
+
 import {
   ArrowBackRounded,
   CloudUploadOutlined,
@@ -573,9 +574,10 @@ export default function ProviderFleetEditPage() {
                 }
               />
               <span>
-                <strong>Available for booking</strong>
+                <strong>Listed for renters</strong>
                 <small>
-                  Turn this off to hide this vehicle from new availability searches.
+                  Turn this off to hide the vehicle from the renter marketplace.
+                  Admin approval is still required before it becomes visible.
                 </small>
               </span>
             </label>
@@ -796,3 +798,4 @@ function EditState({
     </div>
   );
 }
+

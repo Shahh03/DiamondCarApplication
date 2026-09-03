@@ -9,6 +9,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type DragEvent,
@@ -16,6 +17,7 @@ import {
 } from 'react';
 import { flushSync } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
+import { Autocomplete, TextField as MuiTextField } from '@mui/material';
 
 import {
   createProviderFleetVehicle,
@@ -54,6 +56,82 @@ interface PendingPhoto {
   url: string;
 }
 
+const BRAND_ICON_SLUGS: Record<string, string> = {
+  acura: 'acura',
+  audi: 'audi',
+  bentley: 'bentley',
+  bmw: 'bmw',
+  byd: 'byd',
+  cadillac: 'cadillac',
+  chevrolet: 'chevrolet',
+  citroen: 'citroen',
+  dodge: 'dodge',
+  ferrari: 'ferrari',
+  fiat: 'fiat',
+  ford: 'ford',
+  genesis: 'genesis',
+  gmc: 'gmc',
+  honda: 'honda',
+  hyundai: 'hyundai',
+  infiniti: 'infiniti',
+  jaguar: 'jaguar',
+  jeep: 'jeep',
+  kia: 'kia',
+  lamborghini: 'lamborghini',
+  landrover: 'landrover',
+  lexus: 'lexus',
+  maserati: 'maserati',
+  mazda: 'mazda',
+  mercedes: 'mercedes',
+  mercedesbenz: 'mercedes',
+  mini: 'mini',
+  mitsubishi: 'mitsubishi',
+  nissan: 'nissan',
+  peugeot: 'peugeot',
+  porsche: 'porsche',
+  renault: 'renault',
+  subaru: 'subaru',
+  suzuki: 'suzuki',
+  tesla: 'tesla',
+  toyota: 'toyota',
+  volkswagen: 'volkswagen',
+  volvo: 'volvo',
+};
+
+function normalizedBrand(brand: string): string {
+  return brand.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function brandInitials(brand: string): string {
+  const words = brand.trim().split(/\s+/).filter(Boolean);
+  return words
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? '')
+    .join('') || 'CA';
+}
+
+function BrandLogo({ brand }: { brand: string }) {
+  const [failed, setFailed] = useState(false);
+  const slug = BRAND_ICON_SLUGS[normalizedBrand(brand)];
+
+  useEffect(() => setFailed(false), [brand]);
+
+  return (
+    <span className="provider-fleet-add-brand-logo" aria-hidden="true">
+      {slug && !failed ? (
+        <img
+          src={`https://cdn.simpleicons.org/${slug}`}
+          alt=""
+          loading="lazy"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <b>{brandInitials(brand)}</b>
+      )}
+    </span>
+  );
+}
+
 function photoId(): string {
   return `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
@@ -63,6 +141,9 @@ export default function ProviderFleetAddPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [form, setForm] = useState(EMPTY_FORM);
+  const [selectedBrand, setSelectedBrand] = useState('');
+  const [selectedModel, setSelectedModel] = useState('');
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [photos, setPhotos] = useState<PendingPhoto[]>([]);
   const [draggedPhotoId, setDraggedPhotoId] = useState<string | null>(null);
   const [createdVehicleId, setCreatedVehicleId] = useState('');
@@ -83,7 +164,47 @@ export default function ProviderFleetAddPage() {
     };
   }, []);
 
-  const selectedCar = carQuery.data?.find((car) => car._id === form.carId);
+  const catalogue = useMemo(() => carQuery.data ?? [], [carQuery.data]);
+  const brands = useMemo(
+    () => [...new Set(catalogue.map((car) => car.brand))].sort((a, b) => a.localeCompare(b)),
+    [catalogue],
+  );
+  const models = useMemo(
+    () => [
+      ...new Set(
+        catalogue
+          .filter((car) => car.brand === selectedBrand)
+          .map((car) => car.model),
+      ),
+    ].sort((a, b) => a.localeCompare(b)),
+    [catalogue, selectedBrand],
+  );
+  const years = useMemo(
+    () => [
+      ...new Set(
+        catalogue
+          .filter(
+            (car) =>
+              car.brand === selectedBrand && car.model === selectedModel,
+          )
+          .map((car) => car.year),
+      ),
+    ].sort((a, b) => b - a),
+    [catalogue, selectedBrand, selectedModel],
+  );
+  const matchingConfigurations = useMemo(
+    () =>
+      selectedYear == null
+        ? []
+        : catalogue.filter(
+            (car) =>
+              car.brand === selectedBrand &&
+              car.model === selectedModel &&
+              car.year === selectedYear,
+          ),
+    [catalogue, selectedBrand, selectedModel, selectedYear],
+  );
+  const selectedCar = catalogue.find((car) => car._id === form.carId);
 
   const submitMutation = useMutation({
     mutationFn: async () => {
@@ -125,6 +246,33 @@ export default function ProviderFleetAddPage() {
   ) {
     setForm((current) => ({ ...current, [field]: value }));
     setError('');
+  }
+
+  function chooseBrand(brand: string | null) {
+    setSelectedBrand(brand ?? '');
+    setSelectedModel('');
+    setSelectedYear(null);
+    setField('carId', '');
+  }
+
+  function chooseModel(model: string | null) {
+    setSelectedModel(model ?? '');
+    setSelectedYear(null);
+    setField('carId', '');
+  }
+
+  function chooseYear(year: number | null) {
+    setSelectedYear(year);
+    const matches =
+      year == null
+        ? []
+        : catalogue.filter(
+            (car) =>
+              car.brand === selectedBrand &&
+              car.model === selectedModel &&
+              car.year === year,
+          );
+    setField('carId', matches.length === 1 ? matches[0]?._id ?? '' : '');
   }
 
   function addFiles(selected: FileList | null) {
@@ -311,28 +459,83 @@ export default function ProviderFleetAddPage() {
         {error && <div className="provider-fleet-add-error" role="alert">{error}</div>}
 
         <section className="provider-fleet-add-card">
-          <header><span>1</span><div><h2>Vehicle model</h2><p>Select the shared make and model.</p></div></header>
-          <label className="provider-fleet-add-field wide">
-            <span>Car model *</span>
-            <select
-              value={form.carId}
+          <header><span>1</span><div><h2>Vehicle model</h2><p>Find the exact vehicle in the shared catalogue.</p></div></header>
+          <div className="provider-fleet-add-catalogue-grid">
+            <Autocomplete
+              options={brands}
+              value={selectedBrand || null}
               disabled={Boolean(createdVehicleId)}
-              onChange={(event) => setField('carId', event.target.value)}
-            >
-              <option value="">Select a model</option>
-              {(carQuery.data ?? []).map((car) => (
-                <option key={car._id} value={car._id}>
-                  {car.brand} {car.model} · {car.year} · {car.category}
-                </option>
-              ))}
-            </select>
-          </label>
+              onChange={(_event, value) => chooseBrand(value)}
+              noOptionsText="No matching brands"
+              renderOption={(props, option) => (
+                <li {...props}>
+                  <span className="provider-fleet-add-brand-option">
+                    <BrandLogo brand={option} />
+                    <span>{option}</span>
+                  </span>
+                </li>
+              )}
+              renderInput={(params) => (
+                <MuiTextField {...params} label="Brand *" placeholder="Search brands" />
+              )}
+            />
+            <Autocomplete
+              options={models}
+              value={selectedModel || null}
+              disabled={!selectedBrand || Boolean(createdVehicleId)}
+              onChange={(_event, value) => chooseModel(value)}
+              noOptionsText="No matching models"
+              renderInput={(params) => (
+                <MuiTextField {...params} label="Model *" placeholder="Search models" />
+              )}
+            />
+            <Autocomplete
+              options={years}
+              value={selectedYear}
+              disabled={!selectedModel || Boolean(createdVehicleId)}
+              onChange={(_event, value) => chooseYear(value)}
+              noOptionsText="No matching years"
+              getOptionLabel={(option) => option.toString()}
+              renderInput={(params) => (
+                <MuiTextField {...params} label="Year *" placeholder="Select year" />
+              )}
+            />
+          </div>
+
+          {matchingConfigurations.length > 1 && (
+            <div className="provider-fleet-add-configurations">
+              <strong>Choose the correct configuration</strong>
+              <div>
+                {matchingConfigurations.map((car) => (
+                  <button
+                    key={car._id}
+                    type="button"
+                    className={form.carId === car._id ? 'selected' : ''}
+                    disabled={Boolean(createdVehicleId)}
+                    onClick={() => setField('carId', car._id)}
+                  >
+                    <DirectionsCarOutlined />
+                    <span>
+                      <b>{car.category}</b>
+                      <small>{car.transmission} · {car.fuelType} · {car.seats} seats</small>
+                    </span>
+                    {form.carId === car._id && <CheckCircleOutlineRounded />}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {selectedCar && (
             <div className="provider-fleet-add-model-summary">
               <DirectionsCarOutlined />
               <div><strong>{selectedCar.brand} {selectedCar.model}</strong><small>{selectedCar.year} · {selectedCar.category} · {selectedCar.transmission} · {selectedCar.fuelType} · {selectedCar.seats} seats</small></div>
+              <CheckCircleOutlineRounded />
             </div>
           )}
+          <p className="provider-fleet-add-catalogue-help">
+            Can’t find the correct vehicle? Ask an administrator to add it to the shared catalogue.
+          </p>
         </section>
 
         <section className="provider-fleet-add-card">
