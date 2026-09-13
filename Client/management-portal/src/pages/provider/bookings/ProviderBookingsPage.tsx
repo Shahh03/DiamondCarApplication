@@ -253,10 +253,38 @@ export default function ProviderBookingsPage() {
       )}
 
       <section className="provider-bookings-summary" aria-label="Booking summary">
-        <SummaryCard icon={<CalendarMonthOutlined />} label="Upcoming" value={counts.Upcoming} tone="blue" />
-        <SummaryCard icon={<DirectionsCarOutlined />} label="On Rent" value={counts.Active} tone="orange" />
-        <SummaryCard icon={<CheckCircleOutlineRounded />} label="Completed" value={counts.Completed} tone="green" />
-        <SummaryCard icon={<CloseRounded />} label="Cancelled" value={counts.Cancelled} tone="red" />
+        <SummaryCard
+          icon={<CalendarMonthOutlined />}
+          label="Upcoming"
+          value={counts.Upcoming}
+          tone="blue"
+          active={activeTab === 'Upcoming'}
+          onSelect={() => setActiveTab('Upcoming')}
+        />
+        <SummaryCard
+          icon={<CheckCircleOutlineRounded />}
+          label="Completed"
+          value={counts.Completed}
+          tone="green"
+          active={activeTab === 'Completed'}
+          onSelect={() => setActiveTab('Completed')}
+        />
+        <SummaryCard
+          icon={<DirectionsCarOutlined />}
+          label="On Rent"
+          value={counts.Active}
+          tone="orange"
+          active={activeTab === 'Active'}
+          onSelect={() => setActiveTab('Active')}
+        />
+        <SummaryCard
+          icon={<CloseRounded />}
+          label="Cancelled"
+          value={counts.Cancelled}
+          tone="red"
+          active={activeTab === 'Cancelled'}
+          onSelect={() => setActiveTab('Cancelled')}
+        />
       </section>
 
       <section className="provider-bookings-panel">
@@ -539,17 +567,27 @@ function SummaryCard({
   label,
   value,
   tone,
+  active,
+  onSelect,
 }: {
   icon: ReactNode;
   label: string;
   value: number;
   tone: 'blue' | 'orange' | 'green' | 'red';
+  active: boolean;
+  onSelect: () => void;
 }) {
   return (
-    <article className="provider-bookings-summary-card">
+    <button
+      type="button"
+      className={`provider-bookings-summary-card ${tone}${active ? ' active' : ''}`}
+      aria-pressed={active}
+      aria-label={`Show ${label} bookings (${value})`}
+      onClick={onSelect}
+    >
       <span className={tone}>{icon}</span>
       <div><small>{label}</small><strong>{value}</strong></div>
-    </article>
+    </button>
   );
 }
 

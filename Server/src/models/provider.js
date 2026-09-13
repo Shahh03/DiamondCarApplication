@@ -66,6 +66,7 @@ const providerSchema = new mongoose.Schema({
     type: String,
     default: "",
   },
+  profilePicturePublicId: { type: String, default: "", select: false },
   currency: {
   type: String,
   enum: ["AED", "SAR", "QAR", "OMR", "BHD", "USD", "EUR", "GBP"],

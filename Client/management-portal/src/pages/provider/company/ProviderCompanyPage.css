@@ -1,0 +1,39 @@
+.company-page { padding: 32px; color: #102442; max-width: 1600px; margin: auto; }
+.company-page * { box-sizing: border-box; }
+.company-page__heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 26px; }
+.company-page h1 { font-size: clamp(28px, 3vw, 40px); letter-spacing: -1px; margin: 0 0 6px; }
+.company-page h2 { font-size: 19px; margin: 0 0 12px; }
+.company-page p { color: #71819b; line-height: 1.6; margin: 0; }
+.company-page__layout { display: grid; grid-template-columns: minmax(260px, 330px) minmax(0, 1fr); gap: 24px; align-items: start; }
+.company-page__card { border: 1px solid #dce4f0; border-radius: 16px; background: white; padding: 26px; margin-bottom: 22px; box-shadow: 0 4px 16px #152d4f05; }
+.company-page__identity { text-align: center; }
+.company-page__identity h2, .company-page dd { overflow-wrap: anywhere; }
+.company-page__badge { display: inline-block; padding: 6px 12px; border-radius: 7px; font-size: 12px; font-weight: 700; background: #edf1f7; margin-top: 15px; }
+.company-page__badge--accepted { background: #dcfce7; color: #15803d; }
+.company-page__badge--pending { background: #fff0da; color: #a14b00; }
+.company-page__badge--rejected { background: #fee2e2; color: #b91c1c; }
+.company-page__photo { display: grid; justify-items: center; gap: 12px; border-top: 1px solid #edf1f6; padding-top: 22px; margin-top: 22px; }
+.company-page__photo input { display: none; }
+.company-page small { font-weight: 400; color: #71819b; font-size: 12px; overflow-wrap: anywhere; }
+.company-page dl { margin: 0; }
+.company-page dt { color: #71819b; font-size: 12px; margin-top: 20px; }
+.company-page dd { font-size: 14px; margin: 6px 0 0; font-weight: 600; }
+.company-page .company-page__hint { font-size: 13px; margin: 0 0 20px; }
+.company-page dl + .company-page__hint { margin: 22px 0 0; padding-top: 18px; border-top: 1px solid #edf1f6; }
+.company-page__fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.company-page__fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.company-page__wide { grid-column: 1 / -1; }
+.company-page__field { display: flex; flex-direction: column; gap: 9px; font-size: 13px; font-weight: 600; }
+.company-page__field input { width: 100%; border: 1px solid #d6e0ee; border-radius: 9px; padding: 13px 14px; font: inherit; font-size: 14px; font-weight: 400; color: #102442; background: white; }
+.company-page__field input:focus { outline: 2px solid #2563eb; outline-offset: 2px; }
+.company-page button { cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; min-height: 44px; }
+.company-page button:disabled { opacity: .5; cursor: not-allowed; }
+.company-page button:focus-visible { outline: 3px solid #80aaff; outline-offset: 3px; }
+.company-page__primary, .company-page__secondary { border-radius: 9px; padding: 11px 18px; display: inline-flex; gap: 8px; align-items: center; justify-content: center; }
+.company-page__primary { background: #2563eb; color: white; border: 1px solid #2563eb; }
+.company-page__secondary { background: white; color: #2563eb; border: 1px solid #d5e0f1; }
+.company-page__footer { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.company-page__footer span { margin-right: auto; font-size: 13px; color: #71819b; }
+.company-page__empty { padding: 60px 24px; text-align: center; background: white; border: 1px solid #dce4f0; border-radius: 16px; }
+@media (max-width: 1000px) { .company-page__layout { grid-template-columns: 1fr; } .company-page__sidebar { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; } }
+@media (max-width: 640px) { .company-page { padding: 20px 14px; } .company-page__sidebar, .company-page__fields { grid-template-columns: 1fr; } .company-page__heading { align-items: flex-start; } .company-page__card { padding: 20px; } .company-page__footer span { width: 100%; } }

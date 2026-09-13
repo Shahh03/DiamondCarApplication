@@ -55,7 +55,13 @@ const navigation = [
 export default function ProviderPortalLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const session = readSession();
+  const [session, setSession] = useState(readSession);
+
+  useEffect(() => {
+    const syncSession = () => setSession(readSession());
+    window.addEventListener('diamondcar-session-changed', syncSession);
+    return () => window.removeEventListener('diamondcar-session-changed', syncSession);
+  }, []);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
