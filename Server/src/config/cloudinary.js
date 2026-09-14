@@ -6,8 +6,6 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const currentDir = path.dirname(__filename);
 
-// cloudinary.js is in Server/src/config
-// so we go back to Server/.env
 dotenv.config({
   path: path.join(currentDir, "..", "..", ".env"),
 });

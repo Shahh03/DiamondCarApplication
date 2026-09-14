@@ -1,4 +1,5 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
+import { reportApiFailure } from './monitoring';
 
 import {
   clearSession,
@@ -49,7 +50,8 @@ async function refreshAccessToken(): Promise<string | null> {
     };
     writeSession(nextSession);
     return nextSession.accessToken;
-  } catch {
+  } catch (error) {
+    if (axios.isAxiosError(error)) reportApiFailure(error.response?.status);
     clearSession();
     return null;
   }
@@ -58,6 +60,7 @@ async function refreshAccessToken(): Promise<string | null> {
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
+    reportApiFailure(error.response?.status);
     const request = error.config as RetryableRequest | undefined;
     const authenticationRoute =
       request?.url?.includes('/user/login') ||

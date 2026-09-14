@@ -19,6 +19,7 @@ dependencies:
   jwt_decode: ^0.3.1
   flutter_dotenv: ^6.0.1
   table_calendar: ^3.2.0
+  sentry_flutter: 9.30.0
 
 dev_dependencies:
   flutter_test:

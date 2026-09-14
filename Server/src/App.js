@@ -8,6 +8,8 @@ import { fileURLToPath } from "url";
 import multer from "multer";
 import fs from "fs";
 
+import { captureServerFailure, monitorServerResponses } from "./config/sentry.js";
+
 import initializeRoutes from "./routes/routes.js";
 import { stripeWebhook } from "./controllers/payment/payment.controller.js";
 
@@ -41,7 +43,7 @@ class App {
 
     if (!this.DB) {
       console.error("MONGO_URI is missing. Check your Server/.env file.");
-      process.exit(1);
+      throw new Error("MONGO_URI is missing");
     }
 
     try {
@@ -49,11 +51,12 @@ class App {
       console.log("MongoDB connected successfully!");
     } catch (error) {
       console.error("MongoDB connection error:", error);
-      process.exit(1);
+      throw error;
     }
   }
 
   initializeMiddlewares() {
+    this.app.use(monitorServerResponses);
     this.app.use(cors());
 
     // Stripe must receive the exact, unparsed request bytes to verify the
@@ -91,6 +94,9 @@ class App {
       }
 
       console.error(err);
+      res.locals.sentryReported = true;
+      captureServerFailure(err, "express-error-handler");
+      if (res.headersSent) return next(err);
       return res.status(500).json({ error: "Internal server error" });
     });
   }

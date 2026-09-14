@@ -1,18 +1,85 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 import 'authentication/forgot_password.dart';
 import 'authentication/login.dart';
 import 'authentication/signup.dart';
 import 'authentication/welcome.dart';
+import 'config/sentry_config.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
+  SentryWidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
 
-  Stripe.publishableKey = dotenv.env['STRIPE_PUBLISHABLE_KEY'] ?? '';
+  final dsn = dotenv.env['SENTRY_DSN']?.trim() ?? '';
+  final enabled =
+      dotenv.env['SENTRY_ENABLED']?.trim().toLowerCase() == 'true';
+
+  if (!enabled || dsn.isEmpty) {
+    await startApplication();
+    return;
+  }
+
+  await SentryFlutter.init(
+    (options) => configureSentry(options, dotenv.env),
+    appRunner: () async {
+      try {
+        await startApplication();
+      } catch (error, stackTrace) {
+        await Sentry.captureException(
+          error,
+          stackTrace: stackTrace,
+          withScope: (scope) {
+            scope.setTag('operation', 'application-startup');
+          },
+        );
+
+        debugPrint(
+          'Application startup failed: ${error.runtimeType}',
+        );
+
+        runApp(
+          const MaterialApp(
+            debugShowCheckedModeBanner: false,
+            home: Scaffold(
+              body: Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    'Could not start DiamondCar. '
+                    'Please close the app and try again.',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        return;
+      }
+
+      if (kDebugMode && const bool.fromEnvironment('SENTRY_TEST')) {
+        final eventId = await Sentry.captureException(
+          StateError('DiamondCar mobile setup test'),
+          stackTrace: StackTrace.current,
+          withScope: (scope) {
+            scope.setTag('operation', 'setup-test');
+          },
+        );
+
+        debugPrint('Sentry test captured: $eventId');
+      }
+    },
+  );
+}
+
+Future<void> startApplication() async {
+  Stripe.publishableKey =
+      dotenv.env['STRIPE_PUBLISHABLE_KEY'] ?? '';
   Stripe.merchantIdentifier = 'merchant.com.diamondcar';
   Stripe.urlScheme = 'diamondcar';
 
