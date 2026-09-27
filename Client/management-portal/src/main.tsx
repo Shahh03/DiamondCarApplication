@@ -5,7 +5,9 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 
 import App from './App';
+import PortalThemeProvider from './theme/PortalThemeProvider';
 import './index.css';
+import './theme/darkMode.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,18 +21,20 @@ const queryClient = new QueryClient({
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <Sentry.ErrorBoundary fallback={
-      <main role="alert" style={{ maxWidth: 480, margin: '15vh auto', padding: 28, textAlign: 'center', fontFamily: 'sans-serif' }}>
-        <h1>Something went wrong</h1>
-        <p>Please reload the page and try again.</p>
-        <button type="button" onClick={() => window.location.reload()}>Reload page</button>
-      </main>
-    }>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </QueryClientProvider>
-    </Sentry.ErrorBoundary>
+    <PortalThemeProvider>
+      <Sentry.ErrorBoundary fallback={
+        <main role="alert" style={{ maxWidth: 480, margin: '15vh auto', padding: 28, textAlign: 'center', fontFamily: 'sans-serif' }}>
+          <h1>Something went wrong</h1>
+          <p>Please reload the page and try again.</p>
+          <button type="button" onClick={() => window.location.reload()}>Reload page</button>
+        </main>
+      }>
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </QueryClientProvider>
+      </Sentry.ErrorBoundary>
+    </PortalThemeProvider>
   </StrictMode>,
 );

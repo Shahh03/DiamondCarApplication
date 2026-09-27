@@ -706,13 +706,13 @@
 }
 
 .provider-fleet-skeleton-heading i,
-.provider-fleet-skeleton,
 .provider-fleet-loading-panel i {
   display: block;
+  overflow: hidden;
   border-radius: 8px;
-  background: linear-gradient(90deg, #e9eef5 25%, #f7f9fc 45%, #e9eef5 65%);
+  background: linear-gradient(90deg, #e5eaf1 25%, #f5f7fa 45%, #e5eaf1 65%);
   background-size: 220% 100%;
-  animation: provider-fleet-shimmer 1.4s infinite;
+  animation: provider-fleet-shimmer 1.35s ease-in-out infinite;
 }
 
 .provider-fleet-skeleton-heading > div i:first-child {
@@ -732,20 +732,70 @@
 }
 
 .provider-fleet-skeleton {
-  border: 0;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #e1e7ef;
+  background:
+    linear-gradient(#e6ebf2 0 0) 92px 43px / 88px 10px no-repeat,
+    linear-gradient(#edf1f6 0 0) 92px 62px / 54px 22px no-repeat,
+    radial-gradient(circle at 48px 59px, #e6ebf2 0 27px, transparent 28px),
+    #fff;
+  box-shadow: 0 5px 18px rgba(15, 23, 42, 0.045);
+}
+
+.provider-fleet-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-105%);
+  background: linear-gradient(
+    100deg,
+    transparent 28%,
+    rgba(255, 255, 255, 0.72) 48%,
+    transparent 68%
+  );
+  animation: provider-fleet-skeleton-sweep 1.35s ease-in-out infinite;
 }
 
 .provider-fleet-loading-panel {
-  padding: 16px;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid #e1e7ef;
+  background: #fff;
 }
 
 .provider-fleet-loading-panel i {
-  height: 58px;
-  margin-bottom: 9px;
+  position: relative;
+  height: 54px;
+  margin: 0;
+  border-radius: 0;
+  border-bottom: 1px solid #e8edf3;
+  background:
+    linear-gradient(#e4eaf1 0 0) 20px 17px / 18% 9px no-repeat,
+    linear-gradient(#edf1f6 0 0) 20px 33px / 12% 7px no-repeat,
+    linear-gradient(#e8edf3 0 0) 31% 22px / 13% 10px no-repeat,
+    linear-gradient(#e8edf3 0 0) 54% 22px / 11% 10px no-repeat,
+    linear-gradient(#e8edf3 0 0) 75% 22px / 10% 10px no-repeat,
+    #fff;
+}
+
+.provider-fleet-loading-panel i:first-child {
+  height: 64px;
+  border-bottom-color: #dfe6ee;
+  background:
+    linear-gradient(#e5eaf1 0 0) 20px 21px / 30% 22px no-repeat,
+    linear-gradient(#e5eaf1 0 0) calc(100% - 20px) 21px / 24% 22px no-repeat,
+    #f8fafc;
 }
 
 .provider-fleet-loading-panel i:last-child {
-  margin-bottom: 0;
+  border-bottom: 0;
+}
+
+@keyframes provider-fleet-skeleton-sweep {
+  to {
+    transform: translateX(105%);
+  }
 }
 
 .provider-fleet-drawer-layer {

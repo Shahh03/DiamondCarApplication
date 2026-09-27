@@ -1,0 +1,989 @@
+/* Loaded after feature styles so the existing portal can share one dark theme. */
+
+html[data-theme="dark"] body,
+html[data-theme="dark"] #root,
+html[data-theme="dark"] :where(
+  .portal-shell,
+  .provider-layout,
+  .provider-dashboard,
+  .provider-fleet-page,
+  .provider-fleet-edit-page,
+  .provider-fleet-add-page,
+  .provider-bookings-page,
+  .provider-earnings-page,
+  .company-page,
+  .provider-notifications-page,
+  .admin-vehicle-page,
+  .login-page,
+  .signup-page,
+  .success-page
+) {
+  color: var(--ink);
+  background: var(--background);
+}
+
+html[data-theme="dark"] :where(
+  .portal-topbar,
+  .provider-layout__topbar,
+  .admin-vehicle-topbar,
+  .signup-header
+) {
+  border-color: var(--border);
+  background: var(--topbar);
+  box-shadow: 0 2px 12px var(--shadow);
+}
+
+html[data-theme="dark"] :where(
+  .dashboard-card,
+  .kpi-card,
+  .quick-card,
+  .recent-card,
+  .revenue-card,
+  .provider-fleet-kpi,
+  .provider-fleet-panel,
+  .provider-fleet-drawer,
+  .provider-fleet-drawer-section,
+  .provider-fleet-edit-section,
+  .provider-fleet-edit-photos,
+  .provider-fleet-edit-loading,
+  .provider-fleet-edit-state,
+  .provider-bookings-panel,
+  .provider-bookings-summary-card,
+  .provider-bookings-state,
+  .provider-bookings-customer-dialog,
+  .provider-bookings-error-dialog,
+  .provider-earnings-chart-card,
+  .provider-earnings-summary > *,
+  .provider-earnings-state,
+  .company-page__card,
+  .company-page__empty,
+  .provider-notifications-page__card,
+  .admin-vehicle-card,
+  .admin-vehicle-state,
+  .admin-vehicle-dialog,
+  .fleet-kpi,
+  .fleet-panel,
+  .drawer-section,
+  .drawer-price-row > span,
+  .login-card,
+  .signup-card,
+  .signup-success-card,
+  .provider-notification__panel
+) {
+  border-color: var(--border);
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 10px 28px var(--shadow);
+}
+
+html[data-theme="dark"] :where(
+  .advanced-filters,
+  .provider-fleet-toolbar,
+  .provider-fleet-tabs,
+  .provider-fleet-footer,
+  .provider-fleet-edit-readonly-grid > div,
+  .provider-bookings-toolbar,
+  .provider-bookings-footer,
+  .provider-bookings-tabs,
+  .provider-earnings-range,
+  .provider-notifications-page__filters,
+  .admin-vehicle-tabs,
+  .admin-vehicle-provider,
+  .registration-pill,
+  .availability-tabs,
+  .table-footer,
+  .file-field
+) {
+  border-color: var(--border);
+  color: var(--text-soft);
+  background: var(--surface-soft);
+}
+
+html[data-theme="dark"] :where(
+  h1,
+  h2,
+  h3,
+  h4,
+  dt,
+  dd,
+  label,
+  .provider-layout__user-copy strong,
+  .provider-fleet-money,
+  .provider-bookings-reference,
+  .company-page__identity strong,
+  .admin-vehicle-card-body strong,
+  .spec-copy,
+  .money-cell
+) {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] :where(
+  p,
+  small,
+  time,
+  .muted-line,
+  .provider-layout__user-copy small,
+  .provider-fleet-photo-note,
+  .provider-bookings-date-cell span,
+  .provider-notifications-page__copy > span
+) {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] :where(
+  input,
+  select,
+  textarea,
+  .global-search,
+  .fleet-search,
+  .input-shell,
+  .provider-fleet-search,
+  .provider-fleet-selects select,
+  .provider-fleet-filter select,
+  .provider-fleet-edit-field input,
+  .provider-bookings-search,
+  .provider-earnings-search,
+  .company-page__field input,
+  .company-page__field select,
+  .company-page__field textarea,
+  .signup-field input
+) {
+  border-color: var(--border);
+  color: var(--ink);
+  background: var(--input-background);
+}
+
+html[data-theme="dark"] :where(input, textarea)::placeholder {
+  color: #718198;
+}
+
+html[data-theme="dark"] :where(
+  .secondary-button,
+  .icon-button,
+  .mobile-menu,
+  .provider-layout__menu-button,
+  .provider-fleet-edit-cancel,
+  .provider-fleet-pagination button,
+  .provider-bookings-pagination button,
+  .pagination button,
+  .company-page__secondary,
+  .admin-vehicle-heading > button
+) {
+  border-color: var(--border);
+  color: var(--ink);
+  background: var(--surface-raised);
+}
+
+html[data-theme="dark"] :where(
+  .fleet-table,
+  .provider-fleet-table,
+  .provider-bookings-table,
+  .provider-earnings-table
+) th {
+  color: var(--muted);
+  background: var(--surface-soft);
+}
+
+html[data-theme="dark"] :where(
+  .fleet-table,
+  .provider-fleet-table,
+  .provider-bookings-table,
+  .provider-earnings-table
+) td {
+  border-color: var(--border);
+  color: var(--text-soft);
+  background: var(--surface);
+}
+
+html[data-theme="dark"] :where(
+  .fleet-table,
+  .provider-fleet-table,
+  .provider-bookings-table,
+  .provider-earnings-table
+) tbody tr:hover td {
+  background: var(--surface-hover);
+}
+
+html[data-theme="dark"] :where(
+  .provider-notification__header,
+  .provider-notification__item,
+  .provider-notification__all,
+  .provider-notifications-page__item
+) {
+  border-color: var(--border);
+  color: var(--ink);
+  background: var(--surface);
+}
+
+html[data-theme="dark"] :where(
+  .provider-notification__item:hover,
+  .provider-notification__item--unread,
+  .provider-notifications-page__item:hover,
+  .provider-notifications-page__item.unread
+) {
+  background: #142746;
+}
+
+html[data-theme="dark"] :where(
+  .provider-fleet-drawer-backdrop,
+  .provider-bookings-customer-backdrop,
+  .provider-bookings-dialog-backdrop,
+  .provider-bookings-error-backdrop,
+  .admin-vehicle-dialog-backdrop,
+  .drawer-backdrop,
+  .sidebar-backdrop
+) {
+  background: rgba(1, 7, 16, 0.78);
+}
+
+html[data-theme="dark"] :where(
+  .provider-fleet-thumbnail,
+  .provider-fleet-drawer-image,
+  .provider-fleet-edit-no-photos,
+  .provider-bookings-vehicle > span:first-child,
+  .vehicle-thumb,
+  .drawer-photo,
+  .admin-vehicle-gallery
+) {
+  border-color: var(--border);
+  color: var(--muted);
+  background: #17243a;
+}
+
+/* Preserve status meaning with accessible dark surfaces. */
+html[data-theme="dark"] :where(
+  .booking-status.confirmed,
+  .booking-status.upcoming,
+  .provider-bookings-status.confirmed,
+  .provider-fleet-approval.pending,
+  .company-page__badge--pending
+) {
+  color: #93c5fd;
+  background: rgba(37, 99, 235, 0.2);
+}
+
+html[data-theme="dark"] :where(
+  .booking-status.inprogress,
+  .booking-status.active,
+  .provider-bookings-status.inprogress,
+  .provider-fleet-badge.on-rent
+) {
+  color: #fdba74;
+  background: rgba(234, 88, 12, 0.2);
+}
+
+html[data-theme="dark"] :where(
+  .booking-status.completed,
+  .provider-bookings-status.completed,
+  .provider-fleet-approval.approved,
+  .provider-fleet-listing.listed,
+  .company-page__badge--accepted,
+  .admin-vehicle-gallery > span.approved
+) {
+  color: #6ee7b7;
+  background: rgba(5, 150, 105, 0.2);
+}
+
+html[data-theme="dark"] :where(
+  .booking-status.cancelled,
+  .provider-bookings-status.cancelled,
+  .provider-fleet-approval.rejected,
+  .company-page__badge--rejected,
+  .admin-vehicle-gallery > span.rejected
+) {
+  color: #fca5a5;
+  background: rgba(220, 38, 38, 0.2);
+}
+
+html[data-theme="dark"] :where(
+  .provider-fleet-edit-review.rejected,
+  .provider-fleet-review-details.rejected,
+  .admin-vehicle-reason
+) {
+  border-color: #9a5b27;
+  color: #fed7aa;
+  background: rgba(124, 45, 18, 0.28);
+}
+
+html[data-theme="dark"] :where(
+  .provider-fleet-edit-review.rejected,
+  .provider-fleet-review-details.rejected
+) small {
+  color: #fdba74;
+}
+
+html[data-theme="dark"] :where(
+  .provider-fleet-edit-availability,
+  .provider-bookings-notice,
+  .provider-earnings-insight,
+  .admin-vehicle-notice
+) {
+  border-color: #285899;
+  color: #bfdbfe;
+  background: rgba(30, 64, 175, 0.2);
+}
+
+html[data-theme="dark"] .skeleton-block,
+html[data-theme="dark"] .provider-fleet-skeleton-heading i,
+html[data-theme="dark"] .provider-fleet-loading-panel i {
+  background: linear-gradient(90deg, #17253b 25%, #293b55 45%, #17253b 65%);
+  background-size: 220% 100%;
+}
+
+html[data-theme="dark"] .provider-fleet-skeleton {
+  border-color: var(--border) !important;
+  background:
+    linear-gradient(#2a3c57 0 0) 92px 43px / 88px 10px no-repeat,
+    linear-gradient(#21324b 0 0) 92px 62px / 54px 22px no-repeat,
+    radial-gradient(circle at 48px 59px, #2a3c57 0 27px, transparent 28px),
+    var(--surface) !important;
+}
+
+html[data-theme="dark"] .provider-fleet-skeleton::after {
+  background: linear-gradient(
+    100deg,
+    transparent 28%,
+    rgba(115, 151, 198, 0.16) 48%,
+    transparent 68%
+  );
+}
+
+html[data-theme="dark"] .provider-fleet-loading-panel {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+html[data-theme="dark"] .provider-fleet-loading-panel i {
+  border-bottom-color: var(--border);
+  background:
+    linear-gradient(#2a3c57 0 0) 20px 17px / 18% 9px no-repeat,
+    linear-gradient(#21324b 0 0) 20px 33px / 12% 7px no-repeat,
+    linear-gradient(#263953 0 0) 31% 22px / 13% 10px no-repeat,
+    linear-gradient(#263953 0 0) 54% 22px / 11% 10px no-repeat,
+    linear-gradient(#263953 0 0) 75% 22px / 10% 10px no-repeat,
+    var(--surface);
+}
+
+html[data-theme="dark"] .provider-fleet-loading-panel i:first-child {
+  background:
+    linear-gradient(#2a3c57 0 0) 20px 21px / 30% 22px no-repeat,
+    linear-gradient(#2a3c57 0 0) calc(100% - 20px) 21px / 24% 22px no-repeat,
+    var(--surface-soft);
+}
+
+html[data-theme="dark"] :where(.login-brand-panel, .signup-aside) {
+  box-shadow: 0 24px 54px rgba(0, 0, 0, 0.35);
+}
+
+html[data-theme="dark"] img {
+  color-scheme: normal;
+}
+
+/* Page-specific contrast repairs. Feature CSS uses hard-coded light colors, so
+   these rules intentionally carry more specificity than the shared layer. */
+html[data-theme="dark"] .provider-dashboard,
+html[data-theme="dark"] .provider-fleet-page,
+html[data-theme="dark"] .provider-bookings-page,
+html[data-theme="dark"] .provider-earnings-page,
+html[data-theme="dark"] .company-page,
+html[data-theme="dark"] .provider-fleet-edit-page {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .provider-dashboard :is(h1, h2, h3, strong),
+html[data-theme="dark"] .provider-fleet-page :is(h1, h2, h3),
+html[data-theme="dark"] .provider-bookings-page :is(h1, h2, h3),
+html[data-theme="dark"] .provider-earnings-page :is(h1, h2, h3),
+html[data-theme="dark"] .company-page :is(h1, h2, h3),
+html[data-theme="dark"] .provider-fleet-edit-page :is(h1, h2, h3) {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .provider-dashboard :is(p, small),
+html[data-theme="dark"] .provider-fleet-heading p,
+html[data-theme="dark"] .provider-bookings-heading p,
+html[data-theme="dark"] .provider-earnings-heading p,
+html[data-theme="dark"] .provider-fleet-edit-heading p {
+  color: var(--muted);
+}
+
+/* Dashboard */
+html[data-theme="dark"] .dashboard-card {
+  border-color: var(--border);
+  color: var(--text-soft);
+  background: var(--surface);
+  box-shadow: 0 12px 30px var(--shadow);
+}
+
+html[data-theme="dark"] .kpi-copy span,
+html[data-theme="dark"] .utilization-legend span,
+html[data-theme="dark"] .revenue-card header small,
+html[data-theme="dark"] .chart-labels,
+html[data-theme="dark"] .recent-table th {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .kpi-copy strong,
+html[data-theme="dark"] .utilization-legend strong,
+html[data-theme="dark"] .recent-table td,
+html[data-theme="dark"] .quick-item strong {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .recent-card header,
+html[data-theme="dark"] .recent-table th,
+html[data-theme="dark"] .recent-table td {
+  border-color: var(--border);
+}
+
+html[data-theme="dark"] .quick-item {
+  border-color: var(--border);
+  color: var(--text-soft);
+  background: var(--surface-soft);
+}
+
+html[data-theme="dark"] .quick-item:hover {
+  border-color: #4f83cf;
+  background: var(--surface-hover);
+}
+
+html[data-theme="dark"] .revenue-chart {
+  border-color: #52647c;
+  background-image: linear-gradient(to bottom, transparent 24%, #31445f 25%, transparent 26%, transparent 49%, #31445f 50%, transparent 51%, transparent 74%, #31445f 75%, transparent 76%);
+}
+
+html[data-theme="dark"] .donut::before {
+  background: var(--surface-raised);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.035);
+}
+
+html[data-theme="dark"] .donut strong {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .donut small {
+  color: var(--muted);
+}
+
+/* Fleet list and vehicle details */
+html[data-theme="dark"] .provider-fleet-kpi,
+html[data-theme="dark"] .provider-fleet-panel,
+html[data-theme="dark"] .provider-fleet-drawer,
+html[data-theme="dark"] .provider-fleet-drawer-section {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+html[data-theme="dark"] .provider-fleet-kpi {
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+html[data-theme="dark"] .provider-fleet-kpi:hover {
+  border-color: #5277aa;
+  background: var(--surface-raised);
+}
+
+html[data-theme="dark"] .provider-fleet-kpi.active,
+html[data-theme="dark"] .provider-fleet-kpi[aria-pressed="true"] {
+  border-color: #4f8df7;
+  background: #172b49;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+}
+
+html[data-theme="dark"] .provider-fleet-kpi small,
+html[data-theme="dark"] .provider-fleet-vehicle small,
+html[data-theme="dark"] .provider-fleet-photo-count,
+html[data-theme="dark"] .provider-fleet-drawer > header small,
+html[data-theme="dark"] .provider-fleet-details-list dt,
+html[data-theme="dark"] .provider-fleet-prices small {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .provider-fleet-kpi strong,
+html[data-theme="dark"] .provider-fleet-vehicle strong,
+html[data-theme="dark"] .provider-fleet-table td,
+html[data-theme="dark"] .provider-fleet-drawer > header h2,
+html[data-theme="dark"] .provider-fleet-drawer-section h3,
+html[data-theme="dark"] .provider-fleet-details-list dd {
+  color: var(--ink) !important;
+}
+
+html[data-theme="dark"] .provider-fleet-table th,
+html[data-theme="dark"] .provider-fleet-table td,
+html[data-theme="dark"] .provider-fleet-drawer > header,
+html[data-theme="dark"] .provider-fleet-drawer-section {
+  border-color: var(--border);
+}
+
+html[data-theme="dark"] .provider-fleet-table th,
+html[data-theme="dark"] .provider-fleet-toolbar,
+html[data-theme="dark"] .provider-fleet-tabs,
+html[data-theme="dark"] .provider-fleet-footer {
+  background: var(--surface-soft);
+}
+
+html[data-theme="dark"] .provider-fleet-table tbody tr:hover td {
+  background: var(--surface-hover);
+}
+
+html[data-theme="dark"] .provider-fleet-registration,
+html[data-theme="dark"] .provider-bookings-registration {
+  color: var(--text-soft) !important;
+  background: var(--surface-raised);
+}
+
+html[data-theme="dark"] .provider-fleet-prices > span {
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+html[data-theme="dark"] .provider-fleet-drawer > header button,
+html[data-theme="dark"] .provider-bookings-customer-dialog-close {
+  border: 1px solid var(--border);
+  color: var(--ink);
+  background: var(--surface-raised);
+}
+
+html[data-theme="dark"] .provider-fleet-gallery-thumbnails img {
+  border-color: #5b6f89;
+  background: var(--surface-raised);
+}
+
+/* Booking cards, table and selected filter */
+html[data-theme="dark"] .provider-bookings-summary-card {
+  border-color: var(--border);
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 10px 26px var(--shadow);
+}
+
+html[data-theme="dark"] .provider-bookings-summary-card:hover {
+  border-color: #5277aa;
+  background: var(--surface-raised);
+}
+
+html[data-theme="dark"] .provider-bookings-summary-card.active,
+html[data-theme="dark"] .provider-bookings-summary-card[aria-pressed="true"] {
+  border-color: #4f8df7;
+  background: #172b49;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+}
+
+html[data-theme="dark"] .provider-bookings-summary-card small,
+html[data-theme="dark"] .provider-bookings-secondary,
+html[data-theme="dark"] .provider-bookings-customer small,
+html[data-theme="dark"] .provider-bookings-vehicle small,
+html[data-theme="dark"] .provider-bookings-date-cell small,
+html[data-theme="dark"] .provider-bookings-no-action,
+html[data-theme="dark"] .provider-bookings-footer {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .provider-bookings-summary-card strong,
+html[data-theme="dark"] .provider-bookings-customer strong,
+html[data-theme="dark"] .provider-bookings-vehicle strong,
+html[data-theme="dark"] .provider-bookings-date-cell strong,
+html[data-theme="dark"] .provider-bookings-table td {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .provider-bookings-customer-button {
+  color: var(--ink);
+  background: transparent;
+}
+
+html[data-theme="dark"] .provider-bookings-customer-button:hover {
+  background: #203753;
+  box-shadow: inset 0 0 0 1px #35577d;
+}
+
+html[data-theme="dark"] .provider-bookings-customer-button:hover strong {
+  color: #ffffff;
+}
+
+html[data-theme="dark"] .provider-bookings-customer-button:hover small {
+  color: #b9c8da;
+}
+
+html[data-theme="dark"] .provider-bookings-panel,
+html[data-theme="dark"] .provider-bookings-toolbar,
+html[data-theme="dark"] .provider-bookings-tabs,
+html[data-theme="dark"] .provider-bookings-footer,
+html[data-theme="dark"] .provider-bookings-table th,
+html[data-theme="dark"] .provider-bookings-table td {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+html[data-theme="dark"] .provider-bookings-toolbar,
+html[data-theme="dark"] .provider-bookings-table th,
+html[data-theme="dark"] .provider-bookings-footer {
+  background: var(--surface-soft);
+}
+
+html[data-theme="dark"] .provider-bookings-tabs button {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .provider-bookings-tabs button:hover,
+html[data-theme="dark"] .provider-bookings-tabs button.active {
+  color: #76a9ff;
+}
+
+html[data-theme="dark"] .provider-bookings-tabs button span,
+html[data-theme="dark"] .provider-earnings-tabs button span {
+  color: var(--text-soft);
+  background: var(--surface-raised);
+}
+
+html[data-theme="dark"] .provider-bookings-tabs button.active span,
+html[data-theme="dark"] .provider-earnings-tabs button.active span {
+  color: #9ac1ff;
+  background: rgba(37, 99, 235, 0.25);
+}
+
+/* Booking confirmation and customer dialogs */
+html[data-theme="dark"] .provider-bookings-dialog,
+html[data-theme="dark"] .provider-bookings-customer-dialog {
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+}
+
+html[data-theme="dark"] .provider-bookings-dialog > p,
+html[data-theme="dark"] .provider-bookings-dialog-details small,
+html[data-theme="dark"] .provider-bookings-customer-profile small,
+html[data-theme="dark"] .provider-bookings-customer-section dt {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .provider-bookings-dialog-details,
+html[data-theme="dark"] .provider-bookings-customer-section {
+  border-color: var(--border);
+  background: var(--surface-raised);
+}
+
+html[data-theme="dark"] .provider-bookings-dialog footer button:not(.start):not(.complete) {
+  border-color: var(--border);
+  color: var(--ink);
+  background: var(--surface-raised);
+}
+
+html[data-theme="dark"] .provider-bookings-customer-profile {
+  border-color: var(--border);
+  background: linear-gradient(135deg, #152847, #142136 55%, #12343c);
+}
+
+html[data-theme="dark"] .provider-bookings-customer-profile h2,
+html[data-theme="dark"] .provider-bookings-customer-section h3,
+html[data-theme="dark"] .provider-bookings-customer-section dd {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .provider-bookings-customer-sections {
+  background: var(--surface);
+}
+
+/* Earnings */
+html[data-theme="dark"] .provider-earnings-card,
+html[data-theme="dark"] .provider-earnings-chart-card,
+html[data-theme="dark"] .provider-earnings-transactions,
+html[data-theme="dark"] .provider-earnings-range,
+html[data-theme="dark"] .provider-earnings-insight {
+  border-color: var(--border);
+  color: var(--text-soft);
+  background: var(--surface);
+  box-shadow: 0 10px 26px var(--shadow);
+}
+
+html[data-theme="dark"] .provider-earnings-card small,
+html[data-theme="dark"] .provider-earnings-card p,
+html[data-theme="dark"] .provider-earnings-chart-card header p,
+html[data-theme="dark"] .provider-earnings-transactions header p,
+html[data-theme="dark"] .provider-earnings-legend,
+html[data-theme="dark"] .provider-earnings-table td > small,
+html[data-theme="dark"] .provider-earnings-footer {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .provider-earnings-card strong,
+html[data-theme="dark"] .provider-earnings-chart-card h2,
+html[data-theme="dark"] .provider-earnings-transactions h2,
+html[data-theme="dark"] .provider-earnings-table td {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .provider-earnings-chart-card > header,
+html[data-theme="dark"] .provider-earnings-transactions > header,
+html[data-theme="dark"] .provider-earnings-tabs,
+html[data-theme="dark"] .provider-earnings-table th,
+html[data-theme="dark"] .provider-earnings-table td {
+  border-color: var(--border);
+}
+
+html[data-theme="dark"] .provider-earnings-transactions > header,
+html[data-theme="dark"] .provider-earnings-tabs,
+html[data-theme="dark"] .provider-earnings-table th,
+html[data-theme="dark"] .provider-earnings-footer {
+  background: var(--surface-soft);
+}
+
+html[data-theme="dark"] .provider-earnings-table td {
+  background: var(--surface);
+}
+
+html[data-theme="dark"] .provider-earnings-chart {
+  border-color: #53647b;
+  background: repeating-linear-gradient(to bottom, #34475f 0, #34475f 1px, transparent 1px, transparent 25%);
+}
+
+html[data-theme="dark"] .provider-earnings-chart-point > strong {
+  color: var(--text-soft);
+}
+
+html[data-theme="dark"] .provider-earnings-chart-point > small {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .provider-earnings-presets button {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .provider-earnings-presets button:hover {
+  background: var(--surface-hover);
+}
+
+html[data-theme="dark"] .provider-earnings-presets button.active {
+  color: #9ac1ff;
+  background: rgba(37, 99, 235, 0.25);
+}
+
+html[data-theme="dark"] .provider-earnings-heading-actions button,
+html[data-theme="dark"] .provider-earnings-footer button {
+  border-color: var(--border);
+  color: var(--ink);
+  background: var(--surface-raised);
+}
+
+/* Mobile cards and edit page */
+html[data-theme="dark"] .provider-bookings-mobile-list,
+html[data-theme="dark"] .provider-earnings-mobile-list {
+  background: var(--background);
+}
+
+html[data-theme="dark"] .provider-bookings-mobile-card,
+html[data-theme="dark"] .provider-earnings-transaction-card,
+html[data-theme="dark"] .provider-bookings-mobile-card dl div {
+  border-color: var(--border);
+  color: var(--ink);
+  background: var(--surface);
+}
+
+html[data-theme="dark"] .provider-fleet-edit-section,
+html[data-theme="dark"] .provider-fleet-edit-photos,
+html[data-theme="dark"] .provider-fleet-edit-readonly-grid > div {
+  border-color: var(--border);
+  color: var(--ink);
+  background: var(--surface);
+}
+
+html[data-theme="dark"] .provider-fleet-edit-field :is(label, span),
+html[data-theme="dark"] .provider-fleet-edit-readonly-grid small,
+html[data-theme="dark"] .provider-fleet-edit-photo-note {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .provider-fleet-edit-readonly-grid strong {
+  color: var(--ink);
+}
+
+/* Add vehicle */
+html[data-theme="dark"] .provider-fleet-add-page {
+  color: var(--ink);
+  background: var(--background);
+}
+
+html[data-theme="dark"] .provider-fleet-add-heading h1,
+html[data-theme="dark"] .provider-fleet-add-card h2,
+html[data-theme="dark"] .provider-fleet-add-model-summary strong,
+html[data-theme="dark"] .provider-fleet-add-upload strong {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .provider-fleet-add-heading p,
+html[data-theme="dark"] .provider-fleet-add-card header p,
+html[data-theme="dark"] .provider-fleet-add-model-summary small,
+html[data-theme="dark"] .provider-fleet-add-photo-note,
+html[data-theme="dark"] .provider-fleet-add-catalogue-help {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .provider-fleet-add-card {
+  border-color: var(--border);
+  color: var(--text-soft);
+  background: var(--surface);
+  box-shadow: 0 12px 28px var(--shadow);
+}
+
+html[data-theme="dark"] .provider-fleet-add-field > span,
+html[data-theme="dark"] .provider-fleet-add-configurations > strong {
+  color: var(--text-soft);
+}
+
+html[data-theme="dark"] .provider-fleet-add-field input,
+html[data-theme="dark"] .provider-fleet-add-field select,
+html[data-theme="dark"] .provider-fleet-add-catalogue-grid .MuiOutlinedInput-root {
+  border-color: var(--border);
+  color: var(--ink);
+  background: var(--input-background);
+}
+
+html[data-theme="dark"] .provider-fleet-add-catalogue-grid .MuiInputLabel-root,
+html[data-theme="dark"] .provider-fleet-add-catalogue-grid .MuiSvgIcon-root {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .provider-fleet-add-catalogue-grid .MuiOutlinedInput-notchedOutline {
+  border-color: var(--border);
+}
+
+html[data-theme="dark"] .MuiAutocomplete-paper,
+html[data-theme="dark"] .MuiMenu-paper,
+html[data-theme="dark"] .MuiPopper-root .MuiPaper-root {
+  border: 1px solid var(--border);
+  color: var(--ink);
+  background: var(--surface-raised);
+}
+
+html[data-theme="dark"] .MuiAutocomplete-option[aria-selected="true"],
+html[data-theme="dark"] .MuiAutocomplete-option.Mui-focused,
+html[data-theme="dark"] .MuiMenuItem-root:hover {
+  background: var(--surface-hover) !important;
+}
+
+html[data-theme="dark"] .provider-fleet-add-brand-logo {
+  border-color: var(--border);
+  background: #f8fafc;
+}
+
+html[data-theme="dark"] .provider-fleet-add-model-summary,
+html[data-theme="dark"] .provider-fleet-add-configurations button {
+  border-color: var(--border);
+  color: var(--ink);
+  background: var(--surface-raised);
+}
+
+html[data-theme="dark"] .provider-fleet-add-configurations button:hover {
+  border-color: #5277aa;
+  background: var(--surface-hover);
+}
+
+html[data-theme="dark"] .provider-fleet-add-configurations button.selected {
+  border-color: #4f8df7;
+  background: #172b49;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.18);
+}
+
+html[data-theme="dark"] .provider-fleet-add-configurations button small {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .provider-fleet-add-upload {
+  border-color: #47617f;
+  color: var(--muted);
+  background: var(--surface-soft);
+}
+
+html[data-theme="dark"] .provider-fleet-add-upload:hover {
+  border-color: #4f8df7;
+  background: #172b49;
+}
+
+html[data-theme="dark"] .provider-fleet-add-upload.disabled:hover {
+  border-color: #47617f;
+  background: var(--surface-soft);
+}
+
+html[data-theme="dark"] .provider-fleet-add-actions {
+  border-color: var(--border);
+  background: rgba(20, 33, 54, 0.96);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34);
+}
+
+html[data-theme="dark"] .provider-fleet-add-actions a {
+  border-color: var(--border);
+  color: var(--ink);
+  background: var(--surface-raised);
+}
+
+/* Login */
+html[data-theme="dark"] .login-page,
+html[data-theme="dark"] .login-form-panel {
+  color: var(--ink);
+  background: var(--background);
+}
+
+html[data-theme="dark"] .login-form-panel {
+  background:
+    radial-gradient(circle at 88% 12%, rgba(37, 99, 235, 0.12), transparent 32%),
+    var(--background);
+}
+
+html[data-theme="dark"] .login-card {
+  border-color: var(--border);
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 26px 64px rgba(0, 0, 0, 0.46);
+}
+
+html[data-theme="dark"] .login-card h2 {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .login-card p,
+html[data-theme="dark"] .login-card .provider-application-copy {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .field-label {
+  color: var(--text-soft);
+}
+
+html[data-theme="dark"] .login-card .input-shell {
+  border-color: var(--border);
+  color: var(--ink);
+  background: var(--input-background);
+}
+
+html[data-theme="dark"] .login-card .input-shell:focus-within {
+  border-color: #4f8df7;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.16);
+}
+
+html[data-theme="dark"] .login-card .input-shell input {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .login-card .input-action {
+  color: var(--muted);
+}
+
+/* Keep native controls and scrollbars consistent. */
+html[data-theme="dark"] select option {
+  color: var(--ink);
+  background: var(--surface-raised);
+}
+
+html[data-theme="dark"] {
+  scrollbar-color: #52647c #0d1727;
+}
+
+html[data-theme="dark"] *:focus-visible {
+  outline-color: #6da8ff;
+}

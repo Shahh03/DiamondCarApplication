@@ -7,9 +7,8 @@ import {
   HelpOutlineRounded,
   LogoutRounded,
   MenuRounded,
-  SearchRounded,
 } from '@mui/icons-material';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import {
   NavLink,
   Outlet,
@@ -21,6 +20,7 @@ import { logoutManagementUser } from '../../api/authentication/authApi';
 import diamondCarLogo from '../../assets/diamondcar-logo.svg';
 import { readSession } from '../../core/session';
 import ProviderNotificationBell from '../../components/notifications/ProviderNotificationBell';
+import ThemeToggle from '../../components/theme/ThemeToggle';
 
 import './ProviderPortalLayout.css';
 
@@ -64,7 +64,6 @@ export default function ProviderPortalLayout() {
   }, []);
 
   const [menuOpen, setMenuOpen] = useState(false);
-  const [searchValue, setSearchValue] = useState('');
 
   const displayName =
     session?.user.companyName?.trim() ||
@@ -97,15 +96,6 @@ export default function ProviderPortalLayout() {
   async function handleLogout() {
     await logoutManagementUser();
     navigate('/login', { replace: true });
-  }
-
-  function handleSearch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const query = searchValue.trim();
-    if (!query) return;
-
-    navigate(`/provider/fleet?search=${encodeURIComponent(query)}`);
   }
 
   return (
@@ -195,23 +185,8 @@ export default function ProviderPortalLayout() {
             <MenuRounded />
           </button>
 
-          <form
-            className="provider-layout__search"
-            role="search"
-            onSubmit={handleSearch}
-          >
-            <SearchRounded />
-
-            <input
-              type="search"
-              value={searchValue}
-              aria-label="Search vehicles"
-              placeholder="Search vehicles..."
-              onChange={(event) => setSearchValue(event.target.value)}
-            />
-          </form>
-
           <div className="provider-layout__user-actions">
+            <ThemeToggle />
             <ProviderNotificationBell />
 
             <div className="provider-layout__user">

@@ -1,0 +1,51 @@
+.portal-theme-toggle {
+  width: 39px;
+  height: 39px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--ink);
+  background: var(--surface);
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+
+.portal-theme-toggle:hover {
+  color: var(--blue);
+  background: var(--surface-hover);
+  transform: translateY(-1px);
+}
+
+.portal-theme-toggle svg {
+  font-size: 21px;
+}
+
+.portal-theme-toggle--floating {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 120;
+  width: 44px;
+  height: 44px;
+  box-shadow: 0 10px 28px var(--shadow-strong);
+}
+
+@media (max-width: 520px) {
+  .portal-theme-toggle {
+    width: 36px;
+    height: 36px;
+  }
+
+  .portal-theme-toggle--floating {
+    right: 14px;
+    bottom: 14px;
+    width: 42px;
+    height: 42px;
+  }
+}

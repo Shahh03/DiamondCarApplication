@@ -1,5 +1,6 @@
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, useLocation } from 'react-router-dom';
 
+import ThemeToggle from './components/theme/ThemeToggle';
 import ProviderPortalLayout from './layouts/provider/ProviderPortalLayout';
 import LoginPage from './pages/Authentication/Login';
 import SignUpPage from './pages/Authentication/SignUp';
@@ -18,8 +19,13 @@ import RoleGuard from './routes/RoleGuard';
 import './App.css';
 
 export default function App() {
+  const location = useLocation();
+  const providerLayoutOwnsToggle = location.pathname.startsWith('/provider/');
+
   return (
-    <Routes>
+    <>
+      {!providerLayoutOwnsToggle && <ThemeToggle floating />}
+      <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignUpPage />} />
 
@@ -42,6 +48,7 @@ export default function App() {
       </Route>
 
       <Route path="*" element={<DefaultRoute />} />
-    </Routes>
+      </Routes>
+    </>
   );
 }
