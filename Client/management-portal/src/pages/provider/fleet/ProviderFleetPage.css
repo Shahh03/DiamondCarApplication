@@ -538,15 +538,13 @@
   cursor: pointer;
 }
 
-.provider-fleet-resubmit:disabled {
-  opacity: 0.55;
-  cursor: wait;
+.provider-fleet-view:hover,
+.provider-fleet-edit:hover {
+  background: #e7f0ff;
 }
 
-.provider-fleet-view:hover,
-.provider-fleet-edit:hover,
 .provider-fleet-resubmit:hover {
-  background: #e7f0ff;
+  background: #ffedd5;
 }
 
 .provider-fleet-view svg,

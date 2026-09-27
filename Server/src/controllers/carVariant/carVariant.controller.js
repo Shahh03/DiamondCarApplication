@@ -6,6 +6,7 @@ import Booking from "../../models/booking.js";
 import Car from "../../models/car.js";
 import CarVariant from "../../models/carVariant.js";
 import Provider from "../../models/provider.js";
+import { notifyVehicleReviewed } from "../../services/notification.service.js";
 import { getRecommendationsForRenter } from "../../services/recommendation.service.js";
 import {
   cloudinaryFolders,
@@ -599,6 +600,29 @@ export const reviewCarVariant = async (req, res) => {
     variant.rejectionReason = decision === "Rejected" ? reason : "";
     await variant.save();
     await variant.populate(["car", "provider", "reviewedBy"]);
+
+    const vehicleName = [variant.car?.brand, variant.car?.model]
+      .filter(Boolean)
+      .join(" ");
+
+    try {
+      await notifyVehicleReviewed({
+        providerId: variant.provider?._id ?? variant.provider,
+        carVariantId: variant._id,
+        decision,
+        vehicleName,
+        registrationNumber: variant.registrationNumber,
+        rejectionReason: variant.rejectionReason,
+        submittedAt: variant.submittedAt,
+      });
+    } catch (notificationError) {
+      // The admin decision is already saved. A notification failure must not
+      // undo or incorrectly report the vehicle review as failed.
+      console.error(
+        "Could not create vehicle review notification:",
+        notificationError
+      );
+    }
 
     return res.status(200).json({
       message:

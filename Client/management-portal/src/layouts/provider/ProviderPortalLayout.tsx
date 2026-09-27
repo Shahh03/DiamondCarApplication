@@ -7,7 +7,6 @@ import {
   HelpOutlineRounded,
   LogoutRounded,
   MenuRounded,
-  NotificationsNoneRounded,
   SearchRounded,
 } from '@mui/icons-material';
 import { useEffect, useState, type FormEvent } from 'react';
@@ -21,6 +20,7 @@ import {
 import { logoutManagementUser } from '../../api/authentication/authApi';
 import diamondCarLogo from '../../assets/diamondcar-logo.svg';
 import { readSession } from '../../core/session';
+import ProviderNotificationBell from '../../components/notifications/ProviderNotificationBell';
 
 import './ProviderPortalLayout.css';
 
@@ -212,13 +212,7 @@ export default function ProviderPortalLayout() {
           </form>
 
           <div className="provider-layout__user-actions">
-            <button
-              className="provider-layout__notification-button"
-              type="button"
-              aria-label="Notifications"
-            >
-              <NotificationsNoneRounded />
-            </button>
+            <ProviderNotificationBell />
 
             <div className="provider-layout__user">
               {profilePicture ? (

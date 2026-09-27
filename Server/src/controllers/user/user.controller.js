@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 import Provider from "../../models/provider.js";
 import Renter from "../../models/renter.js";
 import User from "../../models/user.js";
+import { notifyProviderReviewed } from "../../services/notification.service.js";
 import {
   hashPassword,
   isHashedPassword,
@@ -344,12 +345,23 @@ export const getPendingProviders = async (_req, res) => {
 
 export const acceptProvider = async (req, res) => {
   try {
-    const provider = await Provider.findByIdAndUpdate(
-      req.params.providerId,
+    const provider = await Provider.findOneAndUpdate(
+      { _id: req.params.providerId, status: "Pending" },
       { status: "Accepted" },
       { new: true, runValidators: true }
     );
-    if (!provider) return res.status(404).json({ message: "Provider not found" });
+    if (!provider) {
+      const existing = await Provider.findById(req.params.providerId)
+        .select("status")
+        .lean();
+      if (!existing) {
+        return res.status(404).json({ message: "Provider not found" });
+      }
+      return res.status(409).json({
+        message: `Provider application is already ${existing.status.toLowerCase()}`,
+      });
+    }
+    await notifyProviderReviewed({ providerId: provider._id, decision: "Accepted" });
     return res.status(200).json({
       message: "Provider accepted successfully",
       provider: withoutSecrets(provider),
@@ -361,12 +373,23 @@ export const acceptProvider = async (req, res) => {
 
 export const rejectProvider = async (req, res) => {
   try {
-    const provider = await Provider.findByIdAndUpdate(
-      req.params.providerId,
+    const provider = await Provider.findOneAndUpdate(
+      { _id: req.params.providerId, status: "Pending" },
       { status: "Rejected" },
       { new: true, runValidators: true }
     );
-    if (!provider) return res.status(404).json({ message: "Provider not found" });
+    if (!provider) {
+      const existing = await Provider.findById(req.params.providerId)
+        .select("status")
+        .lean();
+      if (!existing) {
+        return res.status(404).json({ message: "Provider not found" });
+      }
+      return res.status(409).json({
+        message: `Provider application is already ${existing.status.toLowerCase()}`,
+      });
+    }
+    await notifyProviderReviewed({ providerId: provider._id, decision: "Rejected" });
     return res.status(200).json({
       message: "Provider rejected successfully",
       provider: withoutSecrets(provider),

@@ -378,6 +378,6 @@
   }
 
   .provider-layout__notification-button {
-    display: none;
+    display: grid;
   }
 }

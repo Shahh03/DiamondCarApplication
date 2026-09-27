@@ -7,6 +7,7 @@ import Booking from "../../models/booking.js";
 import CarVariant from "../../models/carVariant.js";
 import Payment from "../../models/payment.js";
 import Renter from "../../models/renter.js";
+import { notifyBookingConfirmed } from "../../services/notification.service.js";
 
 const stripeClient = () => {
   const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -440,15 +441,15 @@ export const stripeWebhook = async (req, res) => {
       return res.status(200).json({ received: true });
     }
 
-    const [renterExists, variant] = await Promise.all([
-      Renter.exists({ _id: renterId }),
+    const [renter, variant] = await Promise.all([
+      Renter.findById(renterId).select("name username").lean(),
       CarVariant.findById(carVariantId).select(
-        "isAvailable approvalStatus archivedAt provider"
-      ),
+        "isAvailable approvalStatus archivedAt provider car registrationNumber"
+      ).populate("car", "brand model"),
     ]);
 
     if (
-      !renterExists ||
+      !renter ||
       !variant ||
       !isPubliclyListed(variant) ||
       variant.provider.toString() !== providerId
@@ -524,7 +525,7 @@ export const stripeWebhook = async (req, res) => {
           { session }
         );
 
-        await Booking.create(
+        const [booking] = await Booking.create(
           [
             {
               renter: renterId,
@@ -538,6 +539,18 @@ export const stripeWebhook = async (req, res) => {
           ],
           { session }
         );
+
+        const vehicleName = [variant.car?.brand, variant.car?.model]
+          .filter(Boolean)
+          .join(" ");
+        await notifyBookingConfirmed({
+          bookingId: booking._id,
+          providerId: variant.provider,
+          carVariantId,
+          renterName: renter.name || renter.username,
+          vehicleName: vehicleName || variant.registrationNumber || "vehicle",
+          session,
+        });
 
         bookingCreated = true;
       });

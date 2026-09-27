@@ -95,6 +95,41 @@
   font-weight: 700;
 }
 
+.provider-fleet-edit-review {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid #bfdbfe;
+  border-radius: 11px;
+  color: #1e3a8a;
+  background: #eff6ff;
+}
+
+.provider-fleet-edit-review.rejected {
+  border-color: #fdba74;
+  color: #9a3412;
+  background: #fff7ed;
+}
+
+.provider-fleet-edit-review strong {
+  display: block;
+  font-size: 12px;
+}
+
+.provider-fleet-edit-review p {
+  margin: 5px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.provider-fleet-edit-review small {
+  display: block;
+  margin-top: 7px;
+  color: #7c2d12;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
 .provider-fleet-edit-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.75fr);

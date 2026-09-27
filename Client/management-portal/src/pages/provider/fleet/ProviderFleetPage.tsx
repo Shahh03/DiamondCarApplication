@@ -14,7 +14,7 @@ import {
   KeyRounded,
   SearchRounded,
 } from '@mui/icons-material';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
   useEffect,
   useMemo,
@@ -26,7 +26,6 @@ import { Link, useSearchParams } from 'react-router-dom';
 
 import {
   getProviderFleet,
-  submitProviderFleetVehicleForReview,
   type FleetCurrentStatus,
   type FleetListingStatus,
   type ProviderFleetBooking,
@@ -148,7 +147,6 @@ export default function ProviderFleetPage() {
   const providerId = readSession()?.user._id ?? '';
   const currency = (readSession()?.user.currency || 'AED').toUpperCase();
   const [searchParams, setSearchParams] = useSearchParams();
-  const queryClient = useQueryClient();
 
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
   const [listing, setListing] = useState<ListingFilter>('all');
@@ -160,21 +158,11 @@ export default function ProviderFleetPage() {
   const [page, setPage] = useState(1);
   const [selectedVehicle, setSelectedVehicle] =
     useState<ProviderFleetVehicle | null>(null);
-  const [actionError, setActionError] = useState('');
 
   const fleetQuery = useQuery({
     queryKey: ['provider', providerId, 'fleet'],
     queryFn: () => getProviderFleet(providerId),
     enabled: Boolean(providerId),
-  });
-
-  const resubmitMutation = useMutation({
-    mutationFn: submitProviderFleetVehicleForReview,
-    onSuccess: async () => {
-      setActionError('');
-      await queryClient.invalidateQueries({ queryKey: ['provider', providerId] });
-    },
-    onError: (error: Error) => setActionError(error.message),
   });
 
   useEffect(() => {
@@ -357,8 +345,6 @@ export default function ProviderFleetPage() {
           Add Vehicle
         </Link>
       </section>
-
-      {actionError && <div className="provider-fleet-action-error" role="alert">{actionError}</div>}
 
       <section className="provider-fleet-kpis" aria-label="Fleet summary">
         <FleetKpi
@@ -566,14 +552,12 @@ export default function ProviderFleetPage() {
                               Edit
                             </Link>
                             {vehicle.approvalStatus === 'Rejected' && (
-                              <button
+                              <Link
                                 className="provider-fleet-resubmit"
-                                type="button"
-                                disabled={resubmitMutation.isPending}
-                                onClick={() => resubmitMutation.mutate(vehicle._id)}
+                                to={`/provider/fleet/${vehicle._id}/edit`}
                               >
-                                Resubmit
-                              </button>
+                                Review &amp; Resubmit
+                              </Link>
                             )}
                           </div>
                         </td>
@@ -620,7 +604,9 @@ export default function ProviderFleetPage() {
                       </button>
                       <Link to={`/provider/fleet/${vehicle._id}/edit`}>
                         <EditOutlined />
-                        Edit
+                        {vehicle.approvalStatus === 'Rejected'
+                          ? 'Review & Resubmit'
+                          : 'Edit'}
                       </Link>
                     </span>
                   </article>

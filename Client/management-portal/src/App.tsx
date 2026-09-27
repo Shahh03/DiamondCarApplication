@@ -11,6 +11,7 @@ import ProviderFleetPage from './pages/provider/fleet/ProviderFleetPage';
 import ProviderFleetAddPage from './pages/provider/fleet/add/ProviderFleetAddPage';
 import ProviderFleetEditPage from './pages/provider/fleet/edit/ProviderFleetEditPage';
 import ProviderCompanyPage from './pages/provider/company/ProviderCompanyPage';
+import ProviderNotificationsPage from './pages/provider/notifications/ProviderNotificationsPage';
 import DefaultRoute from './routes/DefaultRoute';
 import RoleGuard from './routes/RoleGuard';
 
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/provider/bookings" element={<ProviderBookingsPage />} />
           <Route path="/provider/earnings" element={<ProviderEarningsPage />} />
           <Route path="/provider/company" element={<ProviderCompanyPage />} />
+          <Route path="/provider/notifications" element={<ProviderNotificationsPage />} />
         </Route>
       </Route>
 

@@ -24,6 +24,7 @@ import {
   getProviderFleet,
   removeProviderFleetVehicleImage,
   reorderProviderFleetVehicleImages,
+  submitProviderFleetVehicleForReview,
   updateProviderFleetVehicle,
   uploadProviderFleetVehicleImages,
   type ProviderFleetVehicle,
@@ -191,6 +192,10 @@ export default function ProviderFleetEditPage() {
         vehicleId,
         resolvedPhotos.map((photo) => photo.url),
       );
+
+      if (vehicle?.approvalStatus === 'Rejected') {
+        await submitProviderFleetVehicleForReview(vehicleId);
+      }
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -470,7 +475,13 @@ export default function ProviderFleetEditPage() {
             disabled={busy}
           >
             <SaveRounded />
-            {saveMutation.isPending ? 'Saving…' : 'Save Changes'}
+            {saveMutation.isPending
+              ? vehicle.approvalStatus === 'Rejected'
+                ? 'Saving & resubmitting…'
+                : 'Saving…'
+              : vehicle.approvalStatus === 'Rejected'
+                ? 'Save & Resubmit for Review'
+                : 'Save Changes'}
           </button>
         </div>
       </header>
@@ -492,9 +503,15 @@ export default function ProviderFleetEditPage() {
           </strong>
           <p>
             {vehicle.approvalStatus === 'Rejected'
-              ? vehicle.rejectionReason || 'Save your corrections, then resubmit the vehicle from the Fleet page.'
+              ? vehicle.rejectionReason || 'Review and correct the vehicle details before resubmitting it.'
               : 'This vehicle is not visible to renters until an admin approves it.'}
           </p>
+          {vehicle.approvalStatus === 'Rejected' && (
+            <small>
+              Make the requested corrections below. Your changes will be saved
+              before the vehicle is resubmitted to the admin.
+            </small>
+          )}
         </div>
       )}
 
