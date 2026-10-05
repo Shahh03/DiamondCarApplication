@@ -6,9 +6,14 @@ const { Sentry, captureServerFailure } = await import("./config/sentry.js");
 
 class Server {
   async start() {
-    const [{ default: App }, { reportStartupHealth }] = await Promise.all([
+    const [
+      { default: App },
+      { reportStartupHealth },
+      { startBookingHoldExpiryWorker },
+    ] = await Promise.all([
       import("./App.js"),
       import("./config/startupHealth.js"),
+      import("./services/bookingHoldExpiry.service.js"),
     ]);
 
     const app = new App();
@@ -27,6 +32,7 @@ class Server {
     if (databaseError) throw databaseError;
 
     app.initializeMiddlewares();
+    startBookingHoldExpiryWorker();
     app.listen();
   }
 }
@@ -39,3 +45,4 @@ try {
   await Sentry.flush(2000);
   process.exit(1);
 }
+

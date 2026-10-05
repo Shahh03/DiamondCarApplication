@@ -3,7 +3,12 @@ import { randomUUID } from "node:crypto";
 import mongoose from "mongoose";
 import Stripe from "stripe";
 
+import {
+  BOOKING_HOLD_DURATION_MS,
+  BOOKING_HOLD_RETENTION_MS,
+} from "../../config/bookingHold.js";
 import Booking from "../../models/booking.js";
+import BookingHold from "../../models/bookingHold.js";
 import CarVariant from "../../models/carVariant.js";
 import Payment from "../../models/payment.js";
 import Renter from "../../models/renter.js";
@@ -58,6 +63,126 @@ const isPubliclyListed = (variant) =>
   variant.isAvailable === true &&
   (variant.approvalStatus ?? "Approved") === "Approved" &&
   !variant.archivedAt;
+
+const blockingHoldConflictQuery = (
+  carVariant,
+  startDate,
+  endDate
+) => ({
+  carVariant,
+  startDate: { $lte: endDate },
+  endDate: { $gte: startDate },
+  status: { $in: ["Active", "Expiring"] },
+});
+
+const releaseBookingHold = async (holdId, status = "Cancelled") => {
+  if (!holdId) return;
+
+  await BookingHold.updateOne(
+    { _id: holdId, status: "Active" },
+    {
+      $set: {
+        status,
+        purgeAt: new Date(Date.now() + BOOKING_HOLD_RETENTION_MS),
+      },
+    }
+  );
+};
+
+const acquireBookingHold = async ({ renterId, carVariantId, dates }) => {
+  const session = await mongoose.startSession();
+  const checkoutReference = randomUUID();
+  const expiresAt = new Date(Date.now() + BOOKING_HOLD_DURATION_MS);
+  const purgeAt = new Date(Date.now() + BOOKING_HOLD_RETENTION_MS);
+  let hold;
+  let variant;
+
+  try {
+    await session.withTransaction(async () => {
+      // Every checkout for this vehicle writes to the same document. MongoDB
+      // therefore forces simultaneous transactions to run one after another.
+      variant = await CarVariant.findOneAndUpdate(
+        {
+          _id: carVariantId,
+          isAvailable: true,
+          archivedAt: null,
+          $or: [
+            { approvalStatus: "Approved" },
+            { approvalStatus: { $exists: false } },
+          ],
+        },
+        { $inc: { reservationVersion: 1 } },
+        { new: true, session }
+      ).populate("provider");
+
+      if (!variant) {
+        const error = new Error("This vehicle is not currently listed for renters");
+        error.statusCode = 409;
+        error.code = "VEHICLE_NOT_LISTED";
+        throw error;
+      }
+
+      if (!variant.provider) {
+        const error = new Error("Car provider is missing");
+        error.statusCode = 400;
+        throw error;
+      }
+
+      // Do not run operations concurrently on the same MongoDB transaction.
+      const bookingConflict = await Booking.exists(
+        bookingConflictQuery(carVariantId, dates.startDate, dates.endDate)
+      ).session(session);
+      const holdConflict = await BookingHold.exists(
+        blockingHoldConflictQuery(
+          carVariantId,
+          dates.startDate,
+          dates.endDate
+        )
+      ).session(session);
+
+      if (bookingConflict || holdConflict) {
+        const error = new Error(
+          holdConflict
+            ? "This vehicle is temporarily reserved for those dates. Please try again shortly."
+            : "Car is already booked for those dates"
+        );
+        error.statusCode = 409;
+        error.code = holdConflict ? "HOLD_CONFLICT" : "BOOKING_CONFLICT";
+        throw error;
+      }
+
+      const rentalSubtotal = dates.days * variant.rentalPricePerDay;
+      const depositAmount = variant.depositAmount || 0;
+      const totalAmount = rentalSubtotal + depositAmount;
+
+      [hold] = await BookingHold.create(
+        [
+          {
+            renter: renterId,
+            provider: variant.provider._id,
+            carVariant: variant._id,
+            startDate: dates.startDate,
+            endDate: dates.endDate,
+            days: dates.days,
+            dailyRate: variant.rentalPricePerDay,
+            rentalSubtotal,
+            depositAmount,
+            totalAmount,
+            currency: "AED",
+            checkoutReference,
+            expiresAt,
+            purgeAt,
+          },
+        ],
+        { session }
+      );
+    });
+
+    return { hold, variant };
+  } finally {
+    await session.endSession();
+  }
+};
 
 const findRenter = async (renterId) => {
   if (!mongoose.isValidObjectId(renterId)) {
@@ -153,45 +278,28 @@ export const createStripePaymentIntent = async (req, res) => {
     return res.status(400).json({ message: dates.error });
   }
 
+  if (!mongoose.isValidObjectId(carVariant)) {
+    return res.status(400).json({ message: "Invalid car variant ID" });
+  }
+
   let stripeIntent;
+  let bookingHold;
 
   try {
-    const [existingRenter, variant] = await Promise.all([
-      findRenter(renter),
-      CarVariant.findById(carVariant).populate("provider"),
-    ]);
-
-    if (!variant) {
-      return res.status(404).json({ message: "Car variant not found" });
-    }
-
-    if (!variant.provider) {
-      return res.status(400).json({ message: "Car provider is missing" });
-    }
-
-    if (!isPubliclyListed(variant)) {
-      return res.status(409).json({
-        message: "This vehicle is not currently listed for renters",
-      });
-    }
-
-    const conflict = await Booking.exists(
-      bookingConflictQuery(carVariant, dates.startDate, dates.endDate)
-    );
-
-    if (conflict) {
-      return res.status(409).json({
-        message: "Car is already booked for those dates",
-      });
-    }
-
-    const rentalSubtotal = dates.days * variant.rentalPricePerDay;
-    const depositAmount = variant.depositAmount || 0;
-    const totalAmount = rentalSubtotal + depositAmount;
-    const amountInFils = Math.round(totalAmount * 100);
+    const existingRenter = await findRenter(renter);
+    const acquired = await acquireBookingHold({
+      renterId: existingRenter._id,
+      carVariantId: carVariant,
+      dates,
+    });
+    bookingHold = acquired.hold;
+    const variant = acquired.variant;
+    const amountInFils = Math.round(bookingHold.totalAmount * 100);
 
     if (amountInFils < 200) {
-      return res.status(400).json({ message: "Payment amount is too small" });
+      const error = new Error("Payment amount is too small");
+      error.statusCode = 400;
+      throw error;
     }
 
     const stripe = stripeClient();
@@ -200,8 +308,6 @@ export const createStripePaymentIntent = async (req, res) => {
       stripe,
       customer.id
     );
-    const checkoutReference = randomUUID();
-
     stripeIntent = await stripe.paymentIntents.create(
       {
         amount: amountInFils,
@@ -211,37 +317,61 @@ export const createStripePaymentIntent = async (req, res) => {
         ...(savePaymentMethod === true && {
           setup_future_usage: "on_session",
         }),
-        description: `DiamondCar rental ${checkoutReference}`,
+        description: `DiamondCar rental ${bookingHold.checkoutReference}`,
         metadata: {
-          checkoutReference,
+          bookingHoldId: bookingHold._id.toString(),
+          checkoutReference: bookingHold.checkoutReference,
           renterId: existingRenter._id.toString(),
           providerId: variant.provider._id.toString(),
           carVariantId: variant._id.toString(),
-          startDate: dates.startDate.toISOString(),
-          endDate: dates.endDate.toISOString(),
-          days: dates.days.toString(),
-          rentalSubtotal: rentalSubtotal.toString(),
-          depositAmount: depositAmount.toString(),
-          totalAmount: totalAmount.toString(),
+          startDate: bookingHold.startDate.toISOString(),
+          endDate: bookingHold.endDate.toISOString(),
+          days: bookingHold.days.toString(),
+          rentalSubtotal: bookingHold.rentalSubtotal.toString(),
+          depositAmount: bookingHold.depositAmount.toString(),
+          totalAmount: bookingHold.totalAmount.toString(),
           bookingOutcome: "awaiting_payment",
         },
       },
       {
-        idempotencyKey: `diamondcar-payment-${checkoutReference}`,
+        idempotencyKey: `diamondcar-payment-${bookingHold.checkoutReference}`,
       }
     );
+
+    const attachedHold = await BookingHold.findOneAndUpdate(
+      {
+        _id: bookingHold._id,
+        status: "Active",
+        expiresAt: { $gt: new Date() },
+      },
+      { $set: { paymentIntentId: stripeIntent.id } },
+      { new: true, runValidators: true }
+    );
+
+    if (!attachedHold) {
+      const error = new Error(
+        "The temporary reservation expired before payment could start. Please try again."
+      );
+      error.statusCode = 409;
+      error.code = "HOLD_EXPIRED";
+      throw error;
+    }
+    bookingHold = attachedHold;
 
     return res.status(201).json({
       clientSecret: stripeIntent.client_secret,
       paymentIntentId: stripeIntent.id,
       customerId: customer.id,
       customerSessionClientSecret: customerSession.client_secret,
+      bookingHoldId: bookingHold._id,
+      holdExpiresAt: bookingHold.expiresAt,
+      holdDurationSeconds: Math.floor(BOOKING_HOLD_DURATION_MS / 1000),
       pricing: {
-        days: dates.days,
-        dailyRate: variant.rentalPricePerDay,
-        rentalSubtotal,
-        depositAmount,
-        totalAmount,
+        days: bookingHold.days,
+        dailyRate: bookingHold.dailyRate,
+        rentalSubtotal: bookingHold.rentalSubtotal,
+        depositAmount: bookingHold.depositAmount,
+        totalAmount: bookingHold.totalAmount,
         currency: "AED",
       },
     });
@@ -254,6 +384,12 @@ export const createStripePaymentIntent = async (req, res) => {
       } catch (cancelError) {
         console.error("Could not cancel orphaned PaymentIntent:", cancelError);
       }
+    }
+
+    try {
+      await releaseBookingHold(bookingHold?._id);
+    } catch (releaseError) {
+      console.error("Could not release failed booking hold:", releaseError);
     }
 
     console.error("Create Stripe PaymentIntent error:", error);
@@ -297,7 +433,10 @@ export const getStripePaymentStatus = async (req, res) => {
       : null;
 
     const outcome = intent.metadata?.bookingOutcome;
-    const refundedBecauseUnavailable = outcome === "refunded_unavailable";
+    const refundedBecauseUnavailable = [
+      "refunded_unavailable",
+      "refunded_hold_expired",
+    ].includes(outcome);
 
     return res.status(200).json({
       paymentIntentId,
@@ -316,7 +455,9 @@ export const getStripePaymentStatus = async (req, res) => {
         ["Confirmed", "InProgress", "Completed"].includes(booking?.status),
       refunded: refundedBecauseUnavailable || payment?.paymentStatus === "Refunded",
       message: refundedBecauseUnavailable
-        ? "Those dates became unavailable during payment. Your payment was refunded."
+        ? outcome === "refunded_hold_expired"
+          ? "The temporary reservation expired before payment completed. Your payment was refunded."
+          : "Those dates became unavailable during payment. Your payment was refunded."
         : undefined,
     });
   } catch (error) {
@@ -353,14 +494,18 @@ const detectPaymentMethod = async (stripe, intent) => {
   }
 };
 
-const refundUnavailablePayment = async (stripe, intent) => {
+const refundUnavailablePayment = async (
+  stripe,
+  intent,
+  bookingOutcome = "refunded_unavailable"
+) => {
   await stripe.refunds.create(
     { payment_intent: intent.id },
     { idempotencyKey: `diamondcar-unavailable-refund-${intent.id}` }
   );
 
   await stripe.paymentIntents.update(intent.id, {
-    metadata: { bookingOutcome: "refunded_unavailable" },
+    metadata: { bookingOutcome },
   });
 };
 
@@ -423,23 +568,45 @@ export const stripeWebhook = async (req, res) => {
     const renterId = metadata.renterId;
     const providerId = metadata.providerId;
     const carVariantId = metadata.carVariantId;
-    const rentalSubtotal = Number(metadata.rentalSubtotal);
-    const totalAmount = Number(metadata.totalAmount);
+    const metadataRentalSubtotal = Number(metadata.rentalSubtotal);
+    const metadataTotalAmount = Number(metadata.totalAmount);
+    const usesBookingHold = metadata.bookingHoldId != null;
+    const bookingHold = mongoose.isValidObjectId(metadata.bookingHoldId)
+      ? await BookingHold.findById(metadata.bookingHoldId)
+      : null;
+
+    const holdMatchesPayment =
+      !usesBookingHold ||
+      (bookingHold &&
+        bookingHold.renter.toString() === renterId &&
+        bookingHold.provider.toString() === providerId &&
+        bookingHold.carVariant.toString() === carVariantId &&
+        bookingHold.paymentIntentId === stripeObject.id &&
+        bookingHold.startDate.getTime() === dates.startDate?.getTime() &&
+        bookingHold.endDate.getTime() === dates.endDate?.getTime() &&
+        Math.round(bookingHold.totalAmount * 100) ===
+          stripeObject.amount_received);
 
     const metadataIsValid =
       mongoose.isValidObjectId(renterId) &&
       mongoose.isValidObjectId(providerId) &&
       mongoose.isValidObjectId(carVariantId) &&
       !dates.error &&
-      Number.isFinite(rentalSubtotal) &&
-      Number.isFinite(totalAmount) &&
-      Math.round(totalAmount * 100) === stripeObject.amount_received;
+      Number.isFinite(metadataRentalSubtotal) &&
+      Number.isFinite(metadataTotalAmount) &&
+      Math.round(metadataTotalAmount * 100) === stripeObject.amount_received &&
+      holdMatchesPayment;
 
     if (!metadataIsValid) {
       console.error("Invalid booking metadata for", stripeObject.id);
       await refundUnavailablePayment(stripe, stripeObject);
       return res.status(200).json({ received: true });
     }
+
+    // New PaymentIntents use the database snapshot in the hold. The metadata
+    // fallback keeps already-created pre-deployment PaymentIntents compatible.
+    const rentalSubtotal = bookingHold?.rentalSubtotal ?? metadataRentalSubtotal;
+    const totalAmount = bookingHold?.totalAmount ?? metadataTotalAmount;
 
     const [renter, variant] = await Promise.all([
       Renter.findById(renterId).select("name username").lean(),
@@ -461,6 +628,7 @@ export const stripeWebhook = async (req, res) => {
     const paymentMethod = await detectPaymentMethod(stripe, stripeObject);
     const session = await mongoose.startSession();
     let bookingCreated = false;
+    let failureCode = null;
 
     try {
       await session.withTransaction(async () => {
@@ -476,7 +644,7 @@ export const stripeWebhook = async (req, res) => {
               { approvalStatus: { $exists: false } },
             ],
           },
-          { $set: { updatedAt: new Date() } },
+          { $inc: { reservationVersion: 1 } },
           { session }
         );
 
@@ -493,6 +661,30 @@ export const stripeWebhook = async (req, res) => {
         if (duplicatePayment) {
           bookingCreated = true;
           return;
+        }
+
+        let currentHold = null;
+        if (usesBookingHold) {
+          currentHold = await BookingHold.findById(bookingHold._id).session(
+            session
+          );
+          const paymentSucceededAt = new Date(event.created * 1000);
+
+          if (
+            !currentHold ||
+            currentHold.status !== "Active" ||
+            currentHold.paymentIntentId !== stripeObject.id
+          ) {
+            const error = new Error("Temporary reservation is no longer active");
+            error.code = "HOLD_INVALID";
+            throw error;
+          }
+
+          if (paymentSucceededAt > currentHold.expiresAt) {
+            const error = new Error("Temporary reservation expired before payment");
+            error.code = "HOLD_EXPIRED";
+            throw error;
+          }
         }
 
         const conflict = await Booking.exists(
@@ -552,21 +744,45 @@ export const stripeWebhook = async (req, res) => {
           session,
         });
 
+        if (currentHold) {
+          currentHold.status = "Converted";
+          currentHold.convertedBooking = booking._id;
+          currentHold.purgeAt = new Date(
+            Date.now() + BOOKING_HOLD_RETENTION_MS
+          );
+          await currentHold.save({ session });
+        }
+
         bookingCreated = true;
       });
     } catch (error) {
       if (
         error.code !== "BOOKING_CONFLICT" &&
-        error.code !== "VEHICLE_NOT_LISTED"
+        error.code !== "VEHICLE_NOT_LISTED" &&
+        error.code !== "HOLD_INVALID" &&
+        error.code !== "HOLD_EXPIRED"
       ) {
         throw error;
       }
+      failureCode = error.code;
     } finally {
       await session.endSession();
     }
 
     if (!bookingCreated) {
-      await refundUnavailablePayment(stripe, stripeObject);
+      if (usesBookingHold) {
+        await releaseBookingHold(
+          bookingHold?._id,
+          failureCode === "HOLD_EXPIRED" ? "Expired" : "Cancelled"
+        );
+      }
+      await refundUnavailablePayment(
+        stripe,
+        stripeObject,
+        failureCode === "HOLD_EXPIRED"
+          ? "refunded_hold_expired"
+          : "refunded_unavailable"
+      );
     } else {
       await stripe.paymentIntents.update(stripeObject.id, {
         metadata: { bookingOutcome: "confirmed" },

@@ -1,0 +1,128 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "DiamondCar: Backend",
+      "type": "process",
+      "command": "node",
+      "args": ["src/server.js"],
+      "options": {
+        "cwd": "${workspaceFolder}/Server"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "DiamondCar: Management Portal",
+      "type": "process",
+      "command": "npm",
+      "args": ["run", "dev"],
+      "windows": {
+        "command": "npm.cmd"
+      },
+      "options": {
+        "cwd": "${workspaceFolder}/Client/management-portal"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "DiamondCar: Stripe Webhooks",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoLogo",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "$line = Get-Content -LiteralPath '${workspaceFolder}/Server/.env' | Where-Object { $_ -match '^STRIPE_SECRET_KEY=' } | Select-Object -First 1; if (-not $line) { throw 'STRIPE_SECRET_KEY is missing from Server/.env' }; $env:STRIPE_API_KEY = $line.Substring($line.IndexOf('=') + 1).Trim(); stripe listen --events 'payment_intent.succeeded,charge.refunded' --forward-to 'http://localhost:8000/stripe/webhook'"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "DiamondCar: Open Android Studio",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoLogo",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "$fromPath = Get-Command studio64.exe -ErrorAction SilentlyContinue; $toolbox = Get-ChildItem -Path \"$env:LOCALAPPDATA/JetBrains/Toolbox/apps/AndroidStudio\" -Filter studio64.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName; $candidates = @($fromPath.Source, \"$env:ProgramFiles/Android/Android Studio/bin/studio64.exe\", \"$env:LOCALAPPDATA/Programs/Android Studio/bin/studio64.exe\", $toolbox); $studio = $candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1; if (-not $studio) { throw 'Android Studio was not found. Add studio64.exe to PATH or update this task.' }; Start-Process -FilePath $studio -ArgumentList '${workspaceFolder}/Client/mobile-app'"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "DiamondCar: Flutter Mobile",
+      "type": "process",
+      "command": "flutter",
+      "args": ["run"],
+      "options": {
+        "cwd": "${workspaceFolder}/Client/mobile-app"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "DiamondCar: Start Services",
+      "dependsOrder": "parallel",
+      "dependsOn": [
+        "DiamondCar: Stripe Webhooks",
+        "DiamondCar: Backend",
+        "DiamondCar: Management Portal"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "DiamondCar: Start Everything",
+      "dependsOrder": "parallel",
+      "dependsOn": [
+        "DiamondCar: Stripe Webhooks",
+        "DiamondCar: Backend",
+        "DiamondCar: Management Portal",
+        "DiamondCar: Open Android Studio",
+        "DiamondCar: Flutter Mobile"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}

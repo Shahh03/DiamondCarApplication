@@ -23,6 +23,13 @@ const carVariantSchema = new mongoose.Schema(
     rentalPricePerDay: { type: Number, required: true, min: 0 },
     depositAmount: { type: Number, required: true, min: 0 },
     isAvailable: { type: Boolean, default: true },
+    // Updated inside reservation transactions so simultaneous checkout
+    // attempts for the same physical vehicle cannot both create a hold.
+    reservationVersion: {
+      type: Number,
+      default: 0,
+      select: false,
+    },
     archivedAt: { type: Date, default: null },
     approvalStatus: {
       type: String,

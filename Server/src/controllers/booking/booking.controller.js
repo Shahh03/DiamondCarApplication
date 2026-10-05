@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import Stripe from "stripe";
 
 import Booking from "../../models/booking.js";
+import BookingHold from "../../models/bookingHold.js";
 import CarVariant from "../../models/carVariant.js";
 
 export const getProviderBookings = async (req, res) => {
@@ -76,6 +77,17 @@ export const confirmedConflictQuery = (carVariantId, startDate, endDate) => ({
   endDate: { $gte: startDate },
 });
 
+const blockingHoldConflictQuery = (
+  carVariantId,
+  startDate,
+  endDate
+) => ({
+  carVariant: carVariantId,
+  startDate: { $lte: endDate },
+  endDate: { $gte: startDate },
+  status: { $in: ["Active", "Expiring"] },
+});
+
 export const checkBookingAvailability = async (req, res) => {
   try {
     const { carVariantId } = req.params;
@@ -109,14 +121,26 @@ export const checkBookingAvailability = async (req, res) => {
       });
     }
 
-    const conflict = await Booking.exists(
-      confirmedConflictQuery(carVariantId, dates.startDate, dates.endDate)
-    );
+    const [bookingConflict, holdConflict] = await Promise.all([
+      Booking.exists(
+        confirmedConflictQuery(carVariantId, dates.startDate, dates.endDate)
+      ),
+      BookingHold.exists(
+        blockingHoldConflictQuery(
+          carVariantId,
+          dates.startDate,
+          dates.endDate
+        )
+      ),
+    ]);
+    const conflict = bookingConflict || holdConflict;
     return res.status(200).json({
       available: !conflict,
-      message: conflict
+      message: bookingConflict
         ? "This car is already booked for those dates"
-        : "Available for your selected dates",
+        : holdConflict
+          ? "This vehicle is temporarily reserved for those dates"
+          : "Available for your selected dates",
     });
   } catch (error) {
     return res.status(500).json({
@@ -136,20 +160,29 @@ export const getUnavailableDates = async (req, res) => {
 
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
-    const bookings = await Booking.find({
-      carVariant: carVariantId,
-      status: { $in: ["Confirmed", "InProgress"] },
-      endDate: { $gte: today },
-    })
-      .select("startDate endDate -_id")
-      .sort({ startDate: 1 })
-      .lean();
+    const [bookings, holds] = await Promise.all([
+      Booking.find({
+        carVariant: carVariantId,
+        status: { $in: ["Confirmed", "InProgress"] },
+        endDate: { $gte: today },
+      })
+        .select("startDate endDate -_id")
+        .lean(),
+      BookingHold.find({
+        carVariant: carVariantId,
+        endDate: { $gte: today },
+        status: { $in: ["Active", "Expiring"] },
+      })
+        .select("startDate endDate -_id")
+        .lean(),
+    ]);
+
+    const unavailableRanges = [...bookings, ...holds]
+      .map(({ startDate, endDate }) => ({ startDate, endDate }))
+      .sort((left, right) => new Date(left.startDate) - new Date(right.startDate));
 
     return res.status(200).json({
-      unavailableRanges: bookings.map(({ startDate, endDate }) => ({
-        startDate,
-        endDate,
-      })),
+      unavailableRanges,
     });
   } catch (error) {
     return res.status(500).json({
@@ -374,4 +407,3 @@ export const getbookingbyId = async (req, res) => {
     });
   }
 };
-
